@@ -39,13 +39,24 @@ export function Subscribe() {
       }
     } catch {}
     setLoading(false)
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   }, [])
 
   useEffect(() => {
-    loadSubs()
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  }, [loadSubs])
+    const controller = new AbortController()
+    const run = async (signal: AbortSignal) => {
+      setLoading(true)
+      try {
+        const res = await fetch('/api/subscriptions', { signal })
+        if (res.ok) {
+          const data = await res.json()
+          setSubs(Array.isArray(data) ? data : [])
+        }
+      } catch {}
+      setLoading(false)
+    }
+    run(controller.signal)
+    return () => controller.abort()
+  }, [])
 
   const addSub = async () => {
     setAdding(true)

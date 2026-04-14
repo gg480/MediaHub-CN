@@ -9,6 +9,8 @@ interface AppState {
   setSidebarOpen: (open: boolean) => void
   searchQuery: string
   setSearchQuery: (q: string) => void
+  selectedMediaId: string | null
+  setSelectedMediaId: (id: string | null) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -18,6 +20,8 @@ export const useAppStore = create<AppState>((set) => ({
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   searchQuery: '',
   setSearchQuery: (q) => set({ searchQuery: q }),
+  selectedMediaId: null,
+  setSelectedMediaId: (id) => set({ selectedMediaId: id }),
 }))
 
 export const PAGE_LABELS: Record<Page, string> = {

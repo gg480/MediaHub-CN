@@ -10,6 +10,7 @@ import { Subscribe } from '@/components/subscribe'
 import { Downloads } from '@/components/downloads'
 import { Indexers } from '@/components/indexers'
 import { Settings } from '@/components/settings'
+import { MediaDetail } from '@/components/media-detail'
 import { Button } from '@/components/ui/button'
 import { Menu, Moon, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
@@ -92,6 +93,9 @@ export default function HomePage() {
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <PageContent />
         </main>
+
+        {/* Media Detail Dialog */}
+        <MediaDetail />
 
         {/* Footer */}
         <footer className="border-t px-4 sm:px-6 py-3 text-center text-xs text-muted-foreground">

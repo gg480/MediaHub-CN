@@ -22,7 +22,7 @@ export function Library() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [searchQ, setSearchQ] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const { setCurrentPage } = useAppStore()
+  const { setCurrentPage, setSelectedMediaId } = useAppStore()
   const { toast } = useToast()
 
   const loadMedia = useCallback(async () => {
@@ -36,13 +36,25 @@ export function Library() {
       }
     } catch {}
     setLoading(false)
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   }, [filter])
 
   useEffect(() => {
-    loadMedia()
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  }, [loadMedia])
+    const controller = new AbortController()
+    const typeParam = filter !== 'all' ? `&mediaType=${filter}` : ''
+    const run = async (signal: AbortSignal) => {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/media?${typeParam}`, { signal })
+        if (res.ok) {
+          const data = await res.json()
+          setMedia(Array.isArray(data) ? data : [])
+        }
+      } catch {}
+      setLoading(false)
+    }
+    run(controller.signal)
+    return () => controller.abort()
+  }, [filter])
 
   const deleteMedia = async (id: string, title: string) => {
     try {
@@ -120,7 +132,7 @@ export function Library() {
             <Card
               key={item.id}
               className="group cursor-pointer overflow-hidden border-0 shadow-sm hover:shadow-xl transition-all duration-300"
-              onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
+              onClick={() => setSelectedMediaId(item.id)}
             >
               <div className="relative aspect-[2/3] overflow-hidden bg-muted">
                 {item.posterPath ? (
@@ -186,7 +198,7 @@ export function Library() {
         /* List View */
         <div className="space-y-2">
           {filtered.map(item => (
-            <Card key={item.id} className="shadow-sm border-0">
+            <Card key={item.id} className="shadow-sm border-0 cursor-pointer" onClick={() => setSelectedMediaId(item.id)}>
               <CardContent className="p-4 flex items-center gap-4">
                 <div className="w-12 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
                   {item.posterPath ? (

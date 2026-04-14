@@ -63,3 +63,54 @@ Stage Summary:
 - Discover 页面默认展示热门/流行内容，搜索功能正常
 - 所有 API 密钥仅服务端使用，不暴露到客户端
 - 后端 API 完成度提升至约 50%
+
+---
+Task ID: 1
+Agent: Cron Iteration Agent (Round 1)
+Task: Bug修复 + NFO生成 + 媒体详情页
+
+Work Log:
+- 修复了3个 `react-hooks/set-state-in-effect` lint错误：
+  - downloads.tsx: useEffect内联fetch+setInterval实现，避免直接调用setState函数
+  - library.tsx: useEffect内联fetch实现，以filter为依赖
+  - subscribe.tsx: useEffect内联fetch实现
+  - media-detail.tsx: useEffect内联fetch实现
+- 移除了 indexers.tsx 中不存在的 `useInternal` 字段
+- 移除了 indexers API route 中的 `useInternal` 字段，补充了 enableRss/enableSearch/enableAuto/rateLimit 字段
+- 创建了 `/api/indexers/[id]/test/route.ts` — 索引器连接测试API：
+  - Torznab/Newznab: 测试caps端点，检查XML响应
+  - Native PT: 测试站点连通性，通过Cookie检测登录状态
+  - Cardigann: 基本连通性测试
+  - 更新索引器的testStatus/testMessage/testResponseTime/lastTestAt字段
+- 创建了 `/api/download-clients/[id]/test/route.ts` — 下载客户端连接测试：
+  - qBittorrent: 测试WebUI API版本端点，支持认证登录
+  - Transmission: 测试RPC端点（409=需要CSRF令牌但服务可达）
+  - Deluge: 测试JSON RPC端点
+  - 更新客户端的testStatus/testMessage/lastTestAt字段
+- 创建了 `/api/download-clients/[id]/route.ts` — DELETE方法
+- 实现了 `/api/scrape/nfo/route.ts` — NFO生成API：
+  - GET: 读取本地数据生成NFO
+  - POST: 从TMDB刮削元数据后生成NFO
+  - 电影NFO: Kodi/Emby/极影视兼容XML格式（tmdbid/imdbid/评分/导演/演员/海报等）
+  - 剧集NFO: tvshow格式（tmdbid/季集信息/状态等）
+  - 支持doubanRating自定义字段
+  - 自动保存NFO记录到数据库NfoFile表
+- 实现了 `media-detail.tsx` 媒体详情页组件：
+  - 全屏Dialog弹窗，带backdrop背景图+poster
+  - 评分展示（TMDB+豆瓣双评分）
+  - 4个Tab：简介、季集（仅剧集）、NFO预览、下载记录
+  - "刮削元数据"按钮：调用TMDB API更新元数据+生成NFO
+  - "生成NFO"按钮：使用本地数据生成NFO
+  - "搜索下载"按钮：跳转到搜索页
+  - NFO XML预览+复制功能
+- 更新了store.ts添加selectedMediaId/setSelectedMediaId状态
+- 更新了page.tsx引入MediaDetail全局弹窗
+- 更新了library.tsx点击卡片打开详情弹窗
+- 所有代码通过bun run lint检查（0 errors, 0 warnings）
+
+Stage Summary:
+- Lint从3 errors降为0 errors
+- 索引器测试和下载客户端测试API全部实现
+- NFO生成功能完整（电影+剧集，Kodi/Emby/极影视兼容）
+- 媒体详情页功能完整（刮削、NFO预览、季集管理）
+- 整体完成度提升至约65%

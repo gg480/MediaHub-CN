@@ -32,10 +32,21 @@ export function Downloads() {
   }, [])
 
   useEffect(() => {
-    loadTasks()
-    const interval = setInterval(loadTasks, 5000)
-    return () => clearInterval(interval)
-  }, [loadTasks])
+    const controller = new AbortController()
+    const run = async (signal: AbortSignal) => {
+      try {
+        const res = await fetch('/api/downloads', { signal })
+        if (res.ok) {
+          const data = await res.json()
+          setTasks(Array.isArray(data) ? data : [])
+        }
+      } catch {}
+      setLoading(false)
+    }
+    run(controller.signal)
+    const interval = setInterval(() => run(controller.signal), 5000)
+    return () => { controller.abort(); clearInterval(interval) }
+  }, [])
 
   const deleteTask = async (id: string) => {
     try {
