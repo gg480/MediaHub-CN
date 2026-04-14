@@ -33,8 +33,19 @@ export function Downloads() {
 
   useEffect(() => {
     const controller = new AbortController()
+    let syncCounter = 0
+
     const run = async (signal: AbortSignal) => {
       try {
+        // Sync progress from download clients every 3rd refresh (every 15s)
+        syncCounter++
+        if (syncCounter % 3 === 1) {
+          await fetch('/api/downloads/action/sync', {
+            method: 'POST',
+            signal,
+          }).catch(() => {})
+        }
+
         const res = await fetch('/api/downloads', { signal })
         if (res.ok) {
           const data = await res.json()
@@ -43,6 +54,7 @@ export function Downloads() {
       } catch {}
       setLoading(false)
     }
+
     run(controller.signal)
     const interval = setInterval(() => run(controller.signal), 5000)
     return () => { controller.abort(); clearInterval(interval) }
@@ -50,12 +62,17 @@ export function Downloads() {
 
   const deleteTask = async (id: string) => {
     try {
-      const res = await fetch(`/api/downloads?id=${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/downloads/${id}`, { method: 'DELETE' })
       if (res.ok) {
         toast({ title: '已删除' })
         setTasks(prev => prev.filter(t => t.id !== id))
+      } else {
+        const data = await res.json()
+        toast({ title: '删除失败', description: data.error, variant: 'destructive' })
       }
-    } catch {}
+    } catch {
+      toast({ title: '删除失败', description: '网络错误', variant: 'destructive' })
+    }
   }
 
   const activeTasks = tasks.filter(t => ['pending', 'downloading', 'queued'].includes(t.status))

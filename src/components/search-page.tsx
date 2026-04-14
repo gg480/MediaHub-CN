@@ -52,6 +52,7 @@ export function SearchPage() {
   const addDownload = async (result: SearchResult) => {
     try {
       const parsed = parseReleaseQuality(result.title)
+      // Step 1: Create download task in DB
       const res = await fetch('/api/downloads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -73,14 +74,36 @@ export function SearchPage() {
         }),
       })
 
-      if (res.ok) {
-        toast({ title: '已添加', description: `${result.title} 已加入下载队列` })
-      } else {
+      if (!res.ok) {
         const data = await res.json()
         toast({ title: '添加失败', description: data.error, variant: 'destructive' })
+        return
+      }
+
+      const task = await res.json()
+
+      // Step 2: Send to download client automatically
+      const sendRes = await fetch('/api/downloads/action/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          downloadTaskId: task.id,
+        }),
+      })
+
+      if (sendRes.ok) {
+        const sendData = await sendRes.json()
+        if (sendData.success) {
+          toast({ title: '下载已开始', description: sendData.message })
+        } else {
+          toast({ title: '发送失败', description: sendData.message, variant: 'destructive' })
+        }
+      } else {
+        const errData = await sendRes.json()
+        toast({ title: '发送到客户端失败', description: errData.error || '请检查下载客户端配置', variant: 'destructive' })
       }
     } catch {
-      toast({ title: '添加失败', description: '网络错误', variant: 'destructive' })
+      toast({ title: '操作失败', description: '网络错误', variant: 'destructive' })
     }
   }
 

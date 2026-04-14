@@ -114,3 +114,69 @@ Stage Summary:
 - NFO生成功能完整（电影+剧集，Kodi/Emby/极影视兼容）
 - 媒体详情页功能完整（刮削、NFO预览、季集管理）
 - 整体完成度提升至约65%
+
+---
+Task ID: 2
+Agent: Cron Iteration Agent (Round 2)
+Task: 下载集成 + 订阅自动搜索 + 文件整理
+
+Work Log:
+- 审计了现有代码状态：dev server 正常运行，lint 0 errors
+- 搜索引擎API已在Round 1中完整实现（Torznab跨索引器查询+评分+去重）
+- 本次聚焦3个核心功能模块：
+
+### 1. 下载客户端集成（qBittorrent/Transmission）
+- 创建 `/api/downloads/[id]/route.ts` — 下载任务CRUD：
+  - GET: 获取单个下载任务详情（含关联的mediaItem/indexer/client）
+  - PUT: 更新下载任务状态/进度/速度，自动设置startedAt/completedAt时间戳
+  - DELETE: 删除任务，同时尝试从下载客户端删除种子
+- 创建 `/api/downloads/action/send/route.ts` — 发送到下载客户端：
+  - qBittorrent: 完整认证流程 + 磁力链接/种子文件上传双模式
+  - Transmission: CSRF Session ID 管理 + RPC认证 + torrent-add调用
+  - 自动选择分类和保存路径（根据mediaType区分电影/剧集目录）
+  - 自动更新DownloadTask状态为downloading
+  - 重复种子检测（qBittorrent Fails / Transmission torrent-duplicate）
+- 创建 `/api/downloads/action/sync/route.ts` — 下载进度同步：
+  - 从qBittorrent获取种子列表（progress/dlspeed/upspeed/seeders/state）
+  - 从Transmission获取种子列表（percentDone/rateDownload/rateUpload/status）
+  - 自动更新数据库中的进度、速度、做种数
+  - 完成时自动更新MediaItem状态为downloaded
+  - 超时任务自动标记为failed（5分钟未发送）
+- 更新 `search-page.tsx` — 点击"下载"后自动发送到下载客户端：
+  - Step 1: 创建DownloadTask记录
+  - Step 2: 自动调用 /api/downloads/action/send 发送到客户端
+  - 显示详细的成功/失败toast消息
+- 更新 `downloads.tsx` — 实时进度同步：
+  - 每15秒自动调用 /api/downloads/action/sync 同步进度
+  - 每5秒刷新下载列表
+  - 修复deleteTask API路径为 `/api/downloads/${id}`
+
+### 2. 订阅自动搜索
+- 重写 `/api/subscriptions/check/route.ts` — 真实订阅检查实现：
+  - 从订阅获取关键词，支持中文名自动转英文名搜索
+  - 跨索引器搜索（复用搜索引擎逻辑）
+  - 评分过滤（score >= 30的最低质量门槛）
+  - 自动下载最佳结果（autoDownload启用时）
+  - 重复检测（避免重复下载相同种子）
+  - 速率限制检查（遵守rssInterval间隔）
+  - 返回top 5搜索结果概览
+
+### 3. 文件整理模块
+- 创建 `/api/organize/route.ts` — 媒体文件自动整理：
+  - POST: 执行文件整理（支持hardlink/move/copy/dryrun四种模式）
+  - GET: 获取整理设置
+  - PUT: 更新整理设置
+  - 硬链接优先策略（跨文件系统自动降级为复制）
+  - 智能媒体类型检测（从标题识别电影/剧集）
+  - 自动构建标准目录结构：电影 `Title (Year)/`，剧集 `Title/Season XX/`
+  - 字幕文件自动跟随整理
+  - 自动跳过sample文件（< 50MB）
+  - 完成后更新DownloadTask状态为imported，MediaItem状态为organized
+
+Stage Summary:
+- 下载客户端集成完整（qBittorrent + Transmission 双客户端支持）
+- 下载流程闭环：搜索 → 创建任务 → 自动发送到客户端 → 实时进度同步 → 完成状态更新
+- 订阅自动搜索可用（关键词搜索 + 质量评分 + 自动下载）
+- 文件整理模块可用（硬链接优先 + 智能命名 + 字幕跟随）
+- 整体完成度提升至约80%
+- 下一步优先级：豆瓣刮削、通知推送、完善Settings页面
