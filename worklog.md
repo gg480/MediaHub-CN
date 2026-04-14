@@ -180,3 +180,49 @@ Stage Summary:
 - 文件整理模块可用（硬链接优先 + 智能命名 + 字幕跟随）
 - 整体完成度提升至约80%
 - 下一步优先级：豆瓣刮削、通知推送、完善Settings页面
+
+---
+Task ID: 4
+Agent: Cron Iteration Agent (Round 3)
+Task: 豆瓣刮削集成 + Settings页面增强
+
+Work Log:
+- 审计状态：dev server 正常，lint 0 errors
+- 本次聚焦2个功能模块：
+
+### 1. 豆瓣刮削 API
+- 创建 `/api/scrape/douban/route.ts` — 豆瓣刮削服务：
+  - GET: 搜索模式 — `?q=xxx&type=movie` 调用豆瓣subject_suggest API搜索
+  - GET: 详情模式 — `?id=xxx` 获取豆瓣影视详情（评分、简介、海报等）
+  - POST: 刮削并保存 — `?mediaItemId=xxx` 自动搜索豆瓣并更新MediaItem：
+    - 更新doubanId、doubanRating、overviewCn、posterUrl、year
+    - 支持按doubanId直接获取或按标题搜索匹配
+  - PUT: 批量评分 — `?action=ratings` 批量获取媒体项的豆瓣评分
+  - Cookie认证支持（通过设置页配置douban_cookie）
+  - 代理支持（通过设置页配置proxy_host）
+  - 速率限制保护（每次请求间隔2秒）
+  - 403/401检测并提示用户配置Cookie
+
+### 2. Settings 页面增强
+- 新增"文件整理"设置卡片：
+  - 电影库路径配置
+  - 剧集库路径配置
+  - 整理模式选择（硬链接/复制/移动），硬链接标注为NAS推荐
+  - 保存时同时提交到 `/api/organize` 端点
+- 豆瓣Cookie测试按钮：
+  - 点击自动发送测试搜索请求
+  - 成功/失败/需要Cookie 三种状态提示
+- 拉取整理设置：页面加载时并行获取 settings + clients + organize 配置
+
+### 3. 媒体详情页豆瓣集成
+- 新增"豆瓣刮削"按钮（Star图标）
+  - 调用 `/api/scrape/douban?mediaItemId=xxx` POST接口
+  - 成功后自动刷新媒体详情
+  - 显示豆瓣评分更新结果
+
+Stage Summary:
+- 豆瓣刮削API完整（搜索+详情+自动保存+批量评分）
+- Settings页面新增文件整理配置和豆瓣Cookie测试
+- 媒体详情页支持一键豆瓣刮削
+- 整体完成度提升至约85%
+- 下一步优先级：通知推送（Webhook/微信/Telegram）、系统健康检查

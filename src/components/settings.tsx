@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Settings as SettingsIcon, Save, Plus, Trash2, Loader2, Server, Info, Key, FolderOpen } from 'lucide-react'
+import { Settings as SettingsIcon, Save, Plus, Trash2, Loader2, Server, Info, Key, FolderOpen, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { DownloadClient } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+
+interface OrganizeSettings {
+  movieLibraryPath: string
+  tvLibraryPath: string
+  organizeMode: string
+}
 
 const defaultClient: Partial<DownloadClient> = {
   name: '',
@@ -37,6 +43,9 @@ interface AppSettings {
   indexerSyncInterval?: number
   doubanCookie?: string
   proxyHost?: string
+  movieLibraryPath?: string
+  tvLibraryPath?: string
+  organizeMode?: string
 }
 
 export function Settings() {
@@ -48,17 +57,19 @@ export function Settings() {
   const [clientForm, setClientForm] = useState<Partial<DownloadClient>>({ ...defaultClient })
   const [clientSaving, setClientSaving] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
+  const [doubanTesting, setDoubanTesting] = useState(false)
+  const [organizeSettings, setOrganizeSettings] = useState<OrganizeSettings>({ movieLibraryPath: '/media/movies', tvLibraryPath: '/media/tv', organizeMode: 'hardlink' })
   const { toast } = useToast()
 
   const fetchData = useCallback(async () => {
     try {
-      const [settingsRes, clientsRes] = await Promise.all([
+      const [settingsRes, clientsRes, organizeRes] = await Promise.all([
         fetch('/api/settings'),
         fetch('/api/download-clients'),
+        fetch('/api/organize'),
       ])
       if (settingsRes.ok) {
         const data = await settingsRes.json()
-        // Convert array to object if needed
         if (Array.isArray(data)) {
           const obj: Record<string, string> = {}
           for (const item of data) { obj[item.key] = item.value }
@@ -71,12 +82,23 @@ export function Settings() {
             indexerSyncInterval: parseInt(obj.indexer_sync_interval || '60'),
             doubanCookie: obj.douban_cookie,
             proxyHost: obj.proxy_host,
+            movieLibraryPath: obj.movie_library_path,
+            tvLibraryPath: obj.tv_library_path,
+            organizeMode: obj.organize_mode,
           })
         }
       }
       if (clientsRes.ok) {
         const data = await clientsRes.json()
         setClients(Array.isArray(data) ? data : [])
+      }
+      if (organizeRes.ok) {
+        const data = await organizeRes.json()
+        setOrganizeSettings({
+          movieLibraryPath: data.movieLibraryPath || '/media/movies',
+          tvLibraryPath: data.tvLibraryPath || '/media/tv',
+          organizeMode: data.organizeMode || 'hardlink',
+        })
       }
     } catch (e) {
       console.error('Failed to fetch settings:', e)
@@ -90,25 +112,54 @@ export function Settings() {
   const saveSettings = async () => {
     setSaving(true)
     try {
-      await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tmdb_api_key: settings.tmdbApiKey,
-          default_quality_profile: settings.defaultQualityProfile,
-          default_download_path: settings.defaultDownloadPath,
-          auto_search: String(settings.autoSearch ?? false),
-          auto_download: String(settings.autoDownload ?? false),
-          indexer_sync_interval: String(settings.indexerSyncInterval ?? 60),
-          douban_cookie: settings.doubanCookie,
-          proxy_host: settings.proxyHost,
+      await Promise.all([
+        fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tmdb_api_key: settings.tmdbApiKey,
+            default_quality_profile: settings.defaultQualityProfile,
+            default_download_path: settings.defaultDownloadPath,
+            auto_search: String(settings.autoSearch ?? false),
+            auto_download: String(settings.autoDownload ?? false),
+            indexer_sync_interval: String(settings.indexerSyncInterval ?? 60),
+            douban_cookie: settings.doubanCookie,
+            proxy_host: settings.proxyHost,
+          }),
         }),
-      })
+        fetch('/api/organize', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(organizeSettings),
+        }),
+      ])
       toast({ title: '设置已保存' })
     } catch {
       toast({ title: '保存失败', variant: 'destructive' })
     }
     setSaving(false)
+  }
+
+  const testDouban = async () => {
+    setDoubanTesting(true)
+    try {
+      const res = await fetch('/api/scrape/douban?q=test')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.needsCookie) {
+          toast({ title: '需要Cookie', description: '豆瓣需要Cookie才能访问，请先配置', variant: 'destructive' })
+        } else if (data.error) {
+          toast({ title: '连接失败', description: data.error, variant: 'destructive' })
+        } else {
+          toast({ title: '豆瓣连接正常', description: `找到 ${data.results?.length || 0} 条结果` })
+        }
+      } else {
+        toast({ title: '连接失败', description: `HTTP ${res.status}`, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: '测试失败', variant: 'destructive' })
+    }
+    setDoubanTesting(false)
   }
 
   const addClient = async () => {
@@ -195,8 +246,13 @@ export function Settings() {
               </div>
               <div className="space-y-2">
                 <Label>豆瓣 Cookie（可选）</Label>
-                <Input type="password" value={settings.doubanCookie ?? ''} onChange={(e) => setSettings({ ...settings, doubanCookie: e.target.value })} placeholder="用于豆瓣刮削" />
-                <p className="text-[11px] text-muted-foreground">用于获取豆瓣评分和中文简介，非必需</p>
+                <div className="flex gap-2">
+                  <Input type="password" value={settings.doubanCookie ?? ''} onChange={(e) => setSettings({ ...settings, doubanCookie: e.target.value })} placeholder="用于豆瓣刮削" className="flex-1" />
+                  <Button size="sm" variant="outline" disabled={doubanTesting} onClick={testDouban}>
+                    {doubanTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">用于获取豆瓣评分和中文简介，非必需。点击测试按钮验证连接</p>
               </div>
               <div className="space-y-2">
                 <Label>代理地址（可选）</Label>
@@ -328,6 +384,38 @@ export function Settings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* File Organization */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base"><FolderOpen className="h-4 w-4" />文件整理</CardTitle>
+          <CardDescription>配置下载完成后的文件自动整理规则</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>电影库路径</Label>
+            <Input value={organizeSettings.movieLibraryPath} onChange={(e) => setOrganizeSettings({ ...organizeSettings, movieLibraryPath: e.target.value })} placeholder="/media/movies" />
+            <p className="text-[11px] text-muted-foreground">下载完成后电影文件将整理到此目录，如 Title (Year)/</p>
+          </div>
+          <div className="space-y-2">
+            <Label>剧集库路径</Label>
+            <Input value={organizeSettings.tvLibraryPath} onChange={(e) => setOrganizeSettings({ ...organizeSettings, tvLibraryPath: e.target.value })} placeholder="/media/tv" />
+            <p className="text-[11px] text-muted-foreground">下载完成后剧集文件将整理到此目录，如 Title/Season XX/</p>
+          </div>
+          <div className="space-y-2">
+            <Label>整理模式</Label>
+            <Select value={organizeSettings.organizeMode} onValueChange={(v) => setOrganizeSettings({ ...organizeSettings, organizeMode: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hardlink">硬链接（推荐，NAS省空间）</SelectItem>
+                <SelectItem value="copy">复制</SelectItem>
+                <SelectItem value="move">移动</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">硬链接模式节省磁盘空间，跨文件系统时自动降级为复制</p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* System Info */}
       <Card className="border-0 shadow-sm">

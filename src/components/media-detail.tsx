@@ -23,6 +23,7 @@ export function MediaDetail() {
   const [media, setMedia] = useState<MediaItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [scraping, setScraping] = useState(false)
+  const [doubanScraping, setDoubanScraping] = useState(false)
   const [nfoContent, setNfoContent] = useState<string | null>(null)
   const [tmdbData, setTmdbData] = useState<Record<string, unknown> | null>(null)
   const [tmdbLoading, setTmdbLoading] = useState(false)
@@ -74,7 +75,6 @@ export function MediaDetail() {
       if (res.ok) {
         const data = await res.json()
         toast({ title: '刮削完成', description: data.updated ? '元数据已更新' : '使用本地数据生成' })
-        // Reload media
         loadMedia(new AbortController().signal)
         setNfoContent(data.content)
       } else {
@@ -85,6 +85,29 @@ export function MediaDetail() {
       toast({ title: '刮削失败', variant: 'destructive' })
     }
     setScraping(false)
+  }
+
+  const scrapeDouban = async () => {
+    if (!selectedMediaId) return
+    setDoubanScraping(true)
+    try {
+      const res = await fetch(`/api/scrape/douban?mediaItemId=${selectedMediaId}`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) {
+          toast({ title: '豆瓣刮削完成', description: data.doubanRating ? `豆瓣评分: ${data.doubanRating}` : '已更新元数据' })
+          loadMedia(new AbortController().signal)
+        } else {
+          toast({ title: '豆瓣刮削失败', description: data.error, variant: 'destructive' })
+        }
+      } else {
+        const err = await res.json()
+        toast({ title: '豆瓣刮削失败', description: err.error, variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: '豆瓣刮削失败', variant: 'destructive' })
+    }
+    setDoubanScraping(false)
   }
 
   const generateNfo = async () => {
@@ -220,6 +243,10 @@ export function MediaDetail() {
               <Button onClick={scrapeMetadata} disabled={scraping} variant="outline">
                 {scraping ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
                 刮削元数据
+              </Button>
+              <Button onClick={scrapeDouban} disabled={doubanScraping} variant="outline">
+                {doubanScraping ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Star className="w-4 h-4 mr-1" />}
+                豆瓣刮削
               </Button>
               <Button onClick={generateNfo} disabled={scraping} variant="outline">
                 <FileText className="w-4 h-4 mr-1" />生成NFO
