@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.gitignore
+*.md
+!README.md
+db/
+download/
+upload/
+skills/
+agent-ctx/
+examples/
+.env
+.env.local
+dev.log
+server.log
+*.log

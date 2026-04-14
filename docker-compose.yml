@@ -1,0 +1,49 @@
+# ============================================
+# MediaHub-CN Docker Compose
+# 极空间 NAS 一键部署
+# ============================================
+
+services:
+  mediahub-cn:
+    build: .
+    image: mediahub-cn:latest
+    container_name: mediahub-cn
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      # 数据库（容器内路径，持久化到 volume）
+      - DATABASE_URL=file:/app/data/mediahub.db
+      # TMDB API Key（可选，也可在设置页面配置）
+      - TMDB_API_KEY=${TMDB_API_KEY:-}
+      # 代理配置（可选）
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-localhost,127.0.0.1}
+      # 应用端口
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+    volumes:
+      # 持久化数据库
+      - mediahub-data:/app/data
+      # 媒体库目录（根据实际路径修改）
+      - ${MEDIA_ROOT:-/media}:/media
+      # 下载目录（根据实际路径修改）
+      - ${DOWNLOAD_DIR:-/downloads}:/downloads
+    networks:
+      - mediahub-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/system/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  mediahub-data:
+    name: mediahub-cn-data
+
+networks:
+  mediahub-net:
+    name: mediahub-cn-network
+    driver: bridge
