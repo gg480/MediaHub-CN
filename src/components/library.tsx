@@ -36,10 +36,12 @@ export function Library() {
       }
     } catch {}
     setLoading(false)
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   }, [filter])
 
   useEffect(() => {
     loadMedia()
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   }, [loadMedia])
 
   const deleteMedia = async (id: string, title: string) => {

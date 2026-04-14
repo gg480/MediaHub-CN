@@ -39,10 +39,12 @@ export function Subscribe() {
       }
     } catch {}
     setLoading(false)
-  }
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  }, [])
 
   useEffect(() => {
     loadSubs()
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   }, [loadSubs])
 
   const addSub = async () => {

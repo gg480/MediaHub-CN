@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppStore } from '@/lib/store'
 import { Stats, STATUS_MAP } from '@/lib/types'
 import { Card, CardContent } from '@/components/ui/card'
@@ -17,7 +17,7 @@ export function Dashboard() {
   const [recentDownloads, setRecentDownloads] = useState<any[]>([])
 
   // Fetch stats
-  useState(() => {
+  useEffect(() => {
     async function load() {
       try {
         const res = await fetch('/api/stats')
@@ -36,7 +36,7 @@ export function Dashboard() {
       setLoading(false)
     }
     load()
-  })
+  }, [])
 
   const statCards = [
     { label: '总影视数', value: stats?.totalMedia || 0, icon: Film, color: 'from-emerald-500 to-teal-500', page: 'library' as const },

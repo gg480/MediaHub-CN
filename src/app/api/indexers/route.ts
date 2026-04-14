@@ -16,7 +16,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, protocol, scheme, host, port, baseUrl, apiKey, categories, uid, passkey, cookie, vip, useInternal, searchPath, detailsPath, priority, tags } = body
+    const { name, protocol, scheme, host, port, baseUrl, apiKey, categories, uid, passkey, cookie, vip, searchPath, detailsPath, priority, tags, enableRss, enableSearch, enableAuto, rateLimit } = body
 
     if (!name || !host) {
       return NextResponse.json({ error: '缺少必要字段' }, { status: 400 })
@@ -36,11 +36,14 @@ export async function POST(request: NextRequest) {
         passkey: passkey || null,
         cookie: cookie || null,
         vip: vip || false,
-        useInternal: useInternal || false,
         searchPath: searchPath || null,
         detailsPath: detailsPath || null,
         priority: priority || 25,
         tags: tags || null,
+        enableRss: enableRss ?? true,
+        enableSearch: enableSearch ?? true,
+        enableAuto: enableAuto ?? true,
+        rateLimit: rateLimit || 10,
         enabled: true,
       },
     })

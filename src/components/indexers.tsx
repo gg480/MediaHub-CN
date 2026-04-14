@@ -33,7 +33,6 @@ const defaultIndexer: Partial<Indexer> = {
   passkey: '',
   cookie: '',
   vip: false,
-  useInternal: false,
   searchPath: '',
   detailsPath: '',
   priority: 25,
