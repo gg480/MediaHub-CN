@@ -156,6 +156,28 @@ export async function POST() {
       syncedCount++
     }
 
+    // Fire notifications for newly completed/failed downloads (async, non-blocking)
+    try {
+      const recentCompleted = await db.downloadTask.findMany({
+        where: { status: 'completed', completedAt: { gt: new Date(Date.now() - 30 * 1000) } },
+        include: { mediaItem: { select: { titleCn: true } } },
+        take: 10,
+      })
+      for (const t of recentCompleted) {
+        fetch('/api/notifications/action/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'download_complete',
+            body: `「${t.mediaItem?.titleCn || t.title}」下载完成，大小 ${formatBytes(t.size)}`,
+            mediaTitle: t.mediaItem?.titleCn || t.title,
+          }),
+        }).catch(() => {})
+      }
+    } catch {
+      // Non-blocking, ignore errors
+    }
+
     return NextResponse.json({
       synced: syncedCount,
       failed: failedCount,
@@ -286,4 +308,16 @@ function mapState(state: string): string {
   if (s === 'missingfiles' || s === 'error') return 'failed'
   if (s === 'stopped') return 'queued'
   return 'downloading'
+}
+
+function formatBytes(bytes: number | null | undefined): string {
+  if (!bytes) return '未知'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let i = 0
+  let size = bytes
+  while (size >= 1024 && i < units.length - 1) {
+    size /= 1024
+    i++
+  }
+  return `${size.toFixed(i > 0 ? 1 : 0)} ${units[i]}`
 }

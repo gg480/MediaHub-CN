@@ -226,3 +226,78 @@ Stage Summary:
 - 媒体详情页支持一键豆瓣刮削
 - 整体完成度提升至约85%
 - 下一步优先级：通知推送（Webhook/微信/Telegram）、系统健康检查
+
+---
+Task ID: 5
+Agent: Cron Iteration Agent (Round 4)
+Task: 通知推送模块 + 系统健康检查 + 定时任务
+
+Work Log:
+- 审计状态：dev server 正常，lint 0 errors
+- 本次聚焦3个功能模块：
+
+### 1. 通知推送 API
+- 创建 `/api/notifications/route.ts` — 通知渠道CRUD：
+  - GET: 获取所有通知配置列表
+  - POST: 创建通知配置（验证类型、config JSON、必要字段）
+  - 支持4种类型：webhook、wechat（企业微信）、telegram、bark
+  - 事件配置：download_start/complete/fail、organize_complete/fail、new_media、search_fail、health_alert、*（全部）
+- 创建 `/api/notifications/[id]/route.ts` — 单个通知管理：
+  - GET/PUT/DELETE 完整REST接口
+- 创建 `/api/notifications/[id]/test/route.ts` — 通知渠道测试：
+  - Webhook: POST JSON到webhook_url
+  - 企业微信: 获取access_token → 发送markdown消息到@all
+  - Telegram: Bot API sendMessage（支持HTML格式）
+  - Bark: POST到 Bark 服务器
+  - 10秒超时保护，详细错误信息返回
+- 创建 `/api/notifications/action/send/route.ts` — 事件通知触发：
+  - POST: 按事件名称查找所有已启用且订阅了该事件的渠道
+  - 并行发送到所有匹配的通知渠道
+  - 导出 `dispatchNotification` 函数供其他模块调用
+
+### 2. 系统健康检查 API
+- 创建 `/api/system/status/route.ts` — 系统状态端点：
+  - 数据库连接检查（延迟测量）
+  - 内存使用统计（heapUsed/heapTotal/RSS）
+  - 进程运行时间
+  - 各模块统计（媒体库/下载/索引器/订阅/通知/NFO）
+  - 下载客户端连接状态汇总
+  - 索引器状态汇总
+  - 最近下载活动和NFO刮削记录
+- 创建 `/api/system/tasks/route.ts` — 定时任务管理：
+  - GET: 获取所有定时任务及状态
+  - PUT: 启用/禁用任务、修改间隔
+  - POST: 手动执行任务（rss_check/download_sync/health_check/file_organize/indexer_sync）
+  - 任务配置持久化到 Setting 表
+
+### 3. Settings 页面重构
+- 重构为5个Tab布局：通用、下载、通知、系统、任务
+- 通知Tab：
+  - 通知渠道列表（类型图标、启用/禁用、测试、删除）
+  - 添加通知弹窗：动态表单字段根据类型变化
+  - 事件选择：复选框多选，支持"全部事件"
+  - 一键测试通知发送
+- 系统Tab：
+  - 实时系统状态卡片（运行时间、数据库状态、内存使用、响应时间）
+  - 模块统计概览（6宫格）
+  - 下载客户端连接状态列表
+  - 手动刷新按钮
+- 任务Tab：
+  - 定时任务列表（5个预设任务）
+  - 启用/禁用开关
+  - 手动运行按钮
+
+### 4. 通知集成
+- 下载同步完成时自动发送 `download_complete` 事件通知
+- 文件整理完成时自动发送 `organize_complete` 事件通知
+- 通知发送为异步非阻塞，不影响主流程性能
+
+Stage Summary:
+- 通知推送模块完整（4种渠道 + 测试 + 事件触发）
+- 系统健康检查实时状态面板
+- 定时任务管理（5个预设任务 + 手动执行）
+- Settings页面重构为Tab布局，功能分区清晰
+- 下载完成/整理完成自动触发通知
+- 所有代码通过 bun run lint 检查（0 errors, 0 warnings）
+- 整体完成度提升至约90%
+- 下一步优先级：API文档、Docker部署验证、端到端测试

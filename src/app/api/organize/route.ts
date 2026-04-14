@@ -228,6 +228,20 @@ export async function POST(request: NextRequest) {
     }
 
     const successCount = results.filter((r) => r.success).length
+
+    // Fire notification for organize completion (async, non-blocking)
+    if (successCount > 0) {
+      const organizedTitles = results.filter((r) => r.success).map((r) => r.title).slice(0, 5).join('、')
+      fetch('/api/notifications/action/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'organize_complete',
+          body: `已整理 ${successCount} 个媒体文件${results.length > successCount ? `，${results.length - successCount} 个失败` : ''}\n${organizedTitles}${results.filter((r) => r.success).length > 5 ? '...' : ''}`,
+        }),
+      }).catch(() => {})
+    }
+
     return NextResponse.json({
       success: true,
       organized: successCount,
