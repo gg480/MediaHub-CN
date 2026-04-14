@@ -1,0 +1,270 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 影视媒体库（统一电影 + 剧集）
+// ============================================
+model MediaItem {
+  id              String    @id @default(cuid())
+  type            String    // "movie" | "tv"
+  titleCn         String    // 中文标题
+  titleEn         String?   // 英文标题/原名
+  originalTitle   String?   // 原始标题
+  year            Int?      // 上映/首播年份
+  tmdbId          Int?      @unique // TMDB ID
+  imdbId          String?   // IMDB ID
+  doubanId        String?   // 豆瓣 ID
+  overviewCn      String?   // 中文简介
+  overviewEn      String?   // 英文简介
+  posterPath      String?   // TMDB海报路径
+  backdropPath    String?   // TMDB背景图路径
+  posterUrl       String?   // 自定义海报URL
+  backdropUrl     String?   // 自定义背景图URL
+  doubanRating    Float?    // 豆瓣评分
+  tmdbRating      Float?    // TMDB评分
+  status          String    @default("wanted") // wanted | downloading | downloaded | organized | missing
+  monitored       Boolean   @default(true)     // 是否监控
+  qualityProfile  String?   // 质量配置名
+  rootFolder      String?   // 媒体库根目录
+  customFormats   String?   // 自定义格式，JSON
+  tags            String?   // 标签，逗号分隔
+  lastSearchAt    DateTime? // 上次搜索时间
+  addedAt         DateTime  @default(now()) // 添加时间
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  seasons   Season[]
+  downloads DownloadTask[]
+  nfoFiles  NfoFile[]
+}
+
+// 剧集季
+model Season {
+  id           String   @id @default(cuid())
+  mediaItemId  String
+  mediaItem    MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  seasonNumber Int      // 季号
+  title        String?  // 季标题
+  overview     String?  // 季简介
+  monitored    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  episodes Episode[]
+
+  @@unique([mediaItemId, seasonNumber])
+}
+
+// 剧集
+model Episode {
+  id            String   @id @default(cuid())
+  seasonId      String
+  season        Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  episodeNumber Int      // 集号
+  titleCn       String?  // 中文集标题
+  titleEn       String?  // 英文集标题
+  overview      String?  // 集简介
+  airDate       String?  // 播出日期
+  status        String   @default("wanted") // wanted | downloading | downloaded | organized | missing
+  filePath      String?  // 本地文件路径
+  runtime       Int?     // 时长（分钟）
+  thumbnailPath String?  // 缩略图路径
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  downloads DownloadTask[]
+
+  @@unique([seasonId, episodeNumber])
+}
+
+// ============================================
+// 索引器（替代 Prowlarr）
+// ============================================
+model Indexer {
+  id             String    @id @default(cuid())
+  name           String    // 站点名称
+  enabled        Boolean   @default(true)
+  type           String    @default("torznab") // torznab | newznab | native_pt | cardigann
+  protocol       String    @default("torrent") // torrent | nzb
+  scheme         String    @default("https")
+  host           String    // 站点地址
+  port           Int?
+  baseUrl        String?   // API基础路径
+  apiKey         String?   // API密钥（Torznab/Newznab）
+  uid            String?   // 用户ID（PT站需要）
+  passkey        String?   // Passkey
+  cookie         String?   // Cookie认证
+  categories     String?   // 支持的分类ID，逗号分隔
+  searchPath     String?   // 搜索路径模板
+  detailsPath    String?   // 详情页路径模板
+  cardigannYml   String?   // Cardigann YML定义内容
+  vip            Boolean   @default(false)
+  priority       Int       @default(25)
+  tags           String?   // 标签
+  enableRss      Boolean   @default(true)  // 启用RSS
+  enableSearch   Boolean   @default(true)  // 启用搜索
+  enableAuto     Boolean   @default(true)  // 自动搜索
+  rateLimit      Int       @default(10)    // 请求频率限制（秒/次）
+  testStatus     String?   // success | fail | null
+  testMessage    String?   // 测试消息
+  testResponseTime Int?    // 响应时间(ms)
+  lastTestAt     DateTime?
+  lastSearchAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  downloads DownloadTask[]
+}
+
+// ============================================
+// 下载客户端
+// ============================================
+model DownloadClient {
+  id           String    @id @default(cuid())
+  name         String    // 客户端名称
+  enabled      Boolean   @default(true)
+  type         String    // qbittorrent | transmission | deluge
+  host         String    // 地址
+  port         Int       // 端口
+  username     String?   // 用户名
+  password     String?   // 密码
+  baseUrl      String?   // API基础路径
+  category     String?   // 分类标签
+  directory    String?   // 默认下载目录
+  tvCategory   String?   // 剧集分类
+  movieCategory String?  // 电影分类
+  tvDirectory  String?   // 剧集下载目录
+  movieDirectory String? // 电影下载目录
+  priority     Int       @default(1)
+  testStatus   String?   // success | fail | null
+  testMessage  String?   // 测试消息
+  lastTestAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  downloads DownloadTask[]
+}
+
+// ============================================
+// 下载任务
+// ============================================
+model DownloadTask {
+  id             String         @id @default(cuid())
+  mediaItemId    String?
+  mediaItem      MediaItem?     @relation(fields: [mediaItemId], references: [id], onDelete: SetNull)
+  episodeId      String?
+  episode        Episode?       @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  indexerId      String?
+  indexer        Indexer?       @relation(fields: [indexerId], references: [id], onDelete: SetNull)
+  clientId       String?
+  client         DownloadClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  title          String         // 种子标题
+  size           Int?           // 文件大小（字节）
+  magnetUrl      String?        // 磁力链接
+  torrentUrl     String?        // 种子下载链接
+  infoHash       String?        // 种子Hash
+  status         String         @default("pending") // pending | downloading | completed | failed | imported | queued
+  progress       Float          @default(0) // 下载进度 0-1
+  downloadSpeed  Int?           // 下载速度
+  uploadSpeed    Int?           // 上传速度
+  seeders        Int?           // 做种数
+  leechers       Int?           // 下载数
+  grabs          Int?           // 抓取数
+  outputPath     String?        // 下载输出路径
+  quality        String?        // 画质标签 4K/1080P/720P
+  resolution     String?        // 分辨率 2160p/1080p/720p
+  codec          String?        // 编码 H264/H265/AV1
+  source         String?        // 来源 BluRay/WebDL/HDTV/Remux
+  audioCodec     String?        // 音频编码 DTS/Atmos/AAC
+  group          String?        // 发布组/字幕组
+  hasChineseSub  Boolean        @default(false) // 是否含中文字幕
+  errorMessage   String?        // 错误信息
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+// ============================================
+// NFO文件记录
+// ============================================
+model NfoFile {
+  id           String    @id @default(cuid())
+  mediaItemId  String
+  mediaItem    MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  filePath     String    // NFO文件路径
+  nfoType      String    // movie | tvshow | episodedetails
+  seasonNum    Int?      // 仅剧集季NFO使用
+  episodeNum   Int?      // 仅剧集NFO使用
+  content      String    // NFO XML内容
+  scrapedFrom  String?   // tmdb | douban | merged
+  lastScrapedAt DateTime @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// ============================================
+// 订阅
+// ============================================
+model Subscription {
+  id          String   @id @default(cuid())
+  type        String   // movie | tv | douban | rss
+  source      String?  // 来源：douban | tmdb | rss | manual
+  keyword     String?  // 搜索关键词
+  tmdbId      Int?     // TMDB ID
+  doubanId    String?  // 豆瓣ID
+  mediaItemId String?  // 关联的媒体项
+  qualityProfile String? // 质量配置
+  enabled     Boolean  @default(true)
+  autoSearch  Boolean  @default(true) // 自动搜索
+  autoDownload Boolean @default(false) // 自动下载
+  rssUrl      String?  // RSS源URL
+  rssInterval Int      @default(30)   // RSS轮询间隔（分钟）
+  lastCheckAt DateTime? // 上次检查时间
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================
+// 通知配置
+// ============================================
+model Notification {
+  id         String   @id @default(cuid())
+  name       String   // 通知名称
+  type       String   // wechat | webhook | telegram | bark
+  enabled    Boolean  @default(true)
+  config     String   // JSON配置（webhook_url, corp_id, secret等）
+  events     String   // 触发事件，逗号分隔：download_start,download_complete,organize_complete,new_media,search_fail
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ============================================
+// 系统设置
+// ============================================
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
+
+// ============================================
+// 搜索缓存
+// ============================================
+model SearchCache {
+  id        String   @id @default(cuid())
+  query     String   // 搜索关键词
+  indexerId String?  // 索引器ID
+  results   String   // JSON结果
+  hitCount  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([query, indexerId])
+}
