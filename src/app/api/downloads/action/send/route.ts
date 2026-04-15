@@ -89,6 +89,9 @@ export async function POST(request: NextRequest) {
       case 'transmission':
         result = await sendToTransmission(client, targetMagnet, targetTorrent, category)
         break
+      case 'deluge':
+        result = await sendToDeluge(client, targetMagnet, targetTorrent, category, savePath)
+        break
       default:
         return NextResponse.json({ error: `不支持的客户端类型: ${client.type}` }, { status: 400 })
     }
@@ -351,4 +354,146 @@ async function sendToTransmission(
   }
 
   return { success: false, message: `Transmission 错误: ${data.result}` }
+}
+
+// ============================================
+// Deluge integration
+// ============================================
+
+let delugeRpcId = 0
+
+async function delugeRpc(
+  client: ClientRecord,
+  method: string,
+  params: unknown[] = [],
+  timeout = 15000
+): Promise<Record<string, unknown>> {
+  const baseUrl = buildClientUrl(client)
+  const rpcId = ++delugeRpcId
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeout)
+
+  try {
+    const res = await fetch(`${baseUrl}/json`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        method,
+        params,
+        id: rpcId,
+      }),
+    })
+
+    clearTimeout(timer)
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`)
+    }
+
+    const data = await res.json() as Record<string, unknown>
+
+    if (data.error) {
+      throw new Error(String(data.error))
+    }
+
+    return data.result as Record<string, unknown> || {}
+  } catch (error) {
+    clearTimeout(timer)
+    throw error
+  }
+}
+
+async function sendToDeluge(
+  client: ClientRecord,
+  magnetUrl: string,
+  torrentUrl: string,
+  category: string,
+  savePath: string
+): Promise<{ success: boolean; message: string; addedInfoHash?: string }> {
+  try {
+    // Authenticate with Deluge daemon
+    await delugeRpc(client, 'daemon.login', [
+      client.password || '',
+    ])
+
+    // Build download options
+    const options: Record<string, unknown> = {
+      add_paused: false,
+      remove_at_ratio: false,
+    }
+
+    // Set save path (Deluge calls it "download_location")
+    if (savePath) {
+      options.download_location = savePath
+    }
+
+    // Deluge doesn't have categories like qBittorrent, but supports labels via plugin
+    // We store the category in the label if the plugin is available
+    if (category) {
+      try {
+        await delugeRpc(client, 'label.add', [category])
+        options.label = category
+      } catch {
+        // Label plugin not installed, silently ignore
+      }
+    }
+
+    // Add torrent via magnet or URL
+    let addedInfoHash: string | undefined
+    if (magnetUrl) {
+      const result = await delugeRpc(client, 'core.add_torrent_magnet', [magnetUrl, options])
+      addedInfoHash = typeof result === 'string' ? result : undefined
+      if (!addedInfoHash) {
+        return { success: false, message: 'Deluge 未能添加磁力链接' }
+      }
+    } else if (torrentUrl) {
+      // Fetch torrent file content and add via base64
+      try {
+        const torrentRes = await fetch(torrentUrl, {
+          headers: { 'User-Agent': 'MediaHub-CN/1.0' },
+        })
+        if (torrentRes.ok) {
+          const blob = await torrentRes.blob()
+          if (blob.type === 'application/x-bittorrent' || blob.size > 100) {
+            const buffer = await blob.arrayBuffer()
+            const base64 = Buffer.from(buffer).toString('base64')
+            const result = await delugeRpc(client, 'core.add_torrent_url', [
+              `file://${Buffer.from(buffer).toString('binary')}`,
+              options,
+            ])
+            // Fallback: use base64-encoded file content
+            const result2 = await delugeRpc(client, 'core.add_torrent_file', [
+              `${Date.now()}.torrent`,
+              base64,
+              options,
+            ])
+            addedInfoHash = typeof result2 === 'string' ? result2 : undefined
+          } else {
+            // Not a valid torrent file, try as URL
+            const result = await delugeRpc(client, 'core.add_torrent_url', [torrentUrl, options])
+            addedInfoHash = typeof result === 'string' ? result : undefined
+          }
+        } else {
+          return { success: false, message: `无法下载种子文件: HTTP ${torrentRes.status}` }
+        }
+      } catch (error) {
+        return { success: false, message: `种子文件处理失败: ${error instanceof Error ? error.message : '未知错误'}` }
+      }
+    } else {
+      return { success: false, message: '没有可用的下载链接' }
+    }
+
+    return {
+      success: true,
+      message: '已发送到 Deluge',
+      addedInfoHash,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      message: `Deluge 连接失败: ${error instanceof Error ? error.message : '未知错误'}`,
+    }
+  }
 }

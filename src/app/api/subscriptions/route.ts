@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.json(subs)
   } catch (error) {
     console.error('Subscriptions list error:', error)
-    return NextResponse.json([])
+    return NextResponse.json({ error: '获取订阅列表失败' }, { status: 500 })
   }
 }
 

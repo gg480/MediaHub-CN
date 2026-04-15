@@ -27,19 +27,6 @@ export function MediaDetail() {
   const [nfoContent, setNfoContent] = useState<string | null>(null)
   const { toast } = useToast()
 
-  const loadMedia = async (signal: AbortSignal) => {
-    if (!selectedMediaId) return
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/media/${selectedMediaId}`, { signal })
-      if (res.ok) {
-        const data = await res.json()
-        setMedia(data)
-      }
-    } catch {}
-    setLoading(false)
-  }
-
   useEffect(() => {
     const controller = new AbortController()
     const run = async (signal: AbortSignal) => {
@@ -72,7 +59,11 @@ export function MediaDetail() {
       if (res.ok) {
         const data = await res.json()
         toast({ title: '刮削完成', description: data.updated ? '元数据已更新' : '使用本地数据生成' })
-        loadMedia(new AbortController().signal)
+        // Refresh media data
+        try {
+          const refreshRes = await fetch(`/api/media/${selectedMediaId}`)
+          if (refreshRes.ok) setMedia(await refreshRes.json())
+        } catch { /* ignore */ }
         setNfoContent(data.content)
       } else {
         const err = await res.json()
@@ -93,7 +84,11 @@ export function MediaDetail() {
         const data = await res.json()
         if (data.success) {
           toast({ title: '豆瓣刮削完成', description: data.doubanRating ? `豆瓣评分: ${data.doubanRating}` : '已更新元数据' })
-          loadMedia(new AbortController().signal)
+          // Refresh media data
+          try {
+            const refreshRes = await fetch(`/api/media/${selectedMediaId}`)
+            if (refreshRes.ok) setMedia(await refreshRes.json())
+          } catch { /* ignore */ }
         } else {
           toast({ title: '豆瓣刮削失败', description: data.error, variant: 'destructive' })
         }

@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Film, Tv, Search, Star, Calendar, Eye, Trash2,
-  LayoutGrid, List, FolderOpen, ChevronDown, ChevronUp
+  LayoutGrid, List, FolderOpen
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAppStore } from '@/lib/store'
@@ -21,7 +21,6 @@ export function Library() {
   const [filter, setFilter] = useState<'all' | 'movie' | 'tv'>('all')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [searchQ, setSearchQ] = useState('')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
   const { setCurrentPage, setSelectedMediaId } = useAppStore()
   const { toast } = useToast()
 

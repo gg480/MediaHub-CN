@@ -72,6 +72,9 @@ export async function POST() {
           case 'transmission':
             torrents = await getTransmissionTorrents(client)
             break
+          case 'deluge':
+            torrents = await getDelugeTorrents(client)
+            break
           default:
             continue
         }
@@ -332,4 +335,99 @@ function formatBytes(bytes: number | null | undefined): string {
     i++
   }
   return `${size.toFixed(i > 0 ? 1 : 0)} ${units[i]}`
+}
+
+// ============================================
+// Deluge torrent listing
+// ============================================
+
+let delugeSyncRpcId = 0
+
+async function delugeSyncRpc(
+  client: ClientRecord,
+  method: string,
+  params: unknown[] = [],
+  timeout = 15000
+): Promise<Record<string, unknown>> {
+  const baseUrl = buildClientUrl(client)
+  const rpcId = ++delugeSyncRpcId
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeout)
+
+  try {
+    const res = await fetch(`${baseUrl}/json`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({ method, params, id: rpcId }),
+    })
+
+    clearTimeout(timer)
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+    const data = await res.json() as Record<string, unknown>
+    if (data.error) throw new Error(String(data.error))
+
+    return (data.result as Record<string, unknown>) || {}
+  } catch (error) {
+    clearTimeout(timer)
+    throw error
+  }
+}
+
+async function getDelugeTorrents(client: ClientRecord): Promise<TorrentInfo[]> {
+  try {
+    // Authenticate
+    await delugeSyncRpc(client, 'daemon.login', [client.password || ''])
+
+    // Get all torrent statuses with key fields
+    const keys = [
+      'hash', 'name', 'total_size', 'progress', 'download_payload_rate',
+      'upload_payload_rate', 'num_seeds', 'num_peers', 'state',
+      'save_path', 'eta', 'total_done', 'total_wanted',
+    ]
+
+    const result = await delugeSyncRpc(client, 'core.get_torrents_status', [
+      {}, // filter: all torrents
+      keys,
+    ])
+
+    if (!result || typeof result !== 'object') return []
+
+    return Object.values(result).map((t: unknown) => {
+      const torrent = t as Record<string, unknown>
+      const state = String(torrent.state || '')
+      const totalWanted = Number(torrent.total_wanted || 0)
+      const totalDone = Number(torrent.total_done || 0)
+
+      return {
+        hash: String(torrent.hash || ''),
+        name: String(torrent.name || ''),
+        size: Number(torrent.total_size || 0),
+        progress: totalWanted > 0 ? totalDone / totalWanted : Number(torrent.progress || 0),
+        dlspeed: Number(torrent.download_payload_rate || 0),
+        upspeed: Number(torrent.upload_payload_rate || 0),
+        num_seeds: Number(torrent.num_seeds || 0),
+        num_leechs: Number(torrent.num_peers || 0),
+        state: mapDelugeState(state),
+        save_path: String(torrent.save_path || ''),
+        eta: Number(torrent.eta || 0),
+      }
+    })
+  } catch (error) {
+    console.error(`Deluge sync error:`, error)
+    return []
+  }
+}
+
+function mapDelugeState(state: string): string {
+  const s = state.toLowerCase()
+  if (s.includes('downloading') || s.includes('allocating')) return 'downloading'
+  if (s.includes('seeding') || s.includes('finished')) return 'completed'
+  if (s.includes('queued')) return 'queued'
+  if (s.includes('paused') || s.includes('stopped')) return 'stopped'
+  if (s.includes('error') || s.includes('checking')) return 'failed'
+  return 'downloading'
 }

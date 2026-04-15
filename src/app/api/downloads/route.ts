@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(downloads)
   } catch (error) {
     console.error('Downloads list error:', error)
-    return NextResponse.json([])
+    return NextResponse.json({ error: '获取下载列表失败' }, { status: 500 })
   }
 }
 

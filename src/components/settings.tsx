@@ -53,6 +53,8 @@ interface ScheduledTask {
   lastRunAt: string | null
   nextRunAt: string | null
   lastStatus: string | null
+  lastMessage: string | null
+  lastDurationMs: number | null
 }
 
 const defaultClient: Partial<DownloadClient> = {
@@ -836,10 +838,13 @@ export function Settings() {
                             <p className="text-sm font-medium">{task.name}</p>
                             {task.enabled ? <Badge className="text-[10px] px-1.5 py-0 bg-green-100 text-green-700 border-0">启用</Badge> : <Badge className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-500 border-0">禁用</Badge>}
                             {task.lastStatus === 'success' && task.lastRunAt && <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border-0">上次成功</Badge>}
+                            {task.lastStatus === 'error' && <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border-0">上次失败</Badge>}
                           </div>
                           <p className="text-[11px] text-muted-foreground mt-0.5">
                             间隔: {task.intervalMinutes}分钟
                             {task.lastRunAt && ` · 上次: ${new Date(task.lastRunAt).toLocaleString('zh-CN')}`}
+                            {task.lastDurationMs != null && ` · 耗时: ${(task.lastDurationMs / 1000).toFixed(1)}s`}
+                            {task.lastMessage && ` · ${task.lastMessage}`}
                           </p>
                         </div>
                       </div>

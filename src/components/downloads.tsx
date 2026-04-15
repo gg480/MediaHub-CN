@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  Download, Trash2, Pause, Play, CheckCircle, XCircle,
+  Download, Trash2, Play, CheckCircle, XCircle,
   Clock, ArrowDown, ArrowUp, HardDrive, Loader2
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'

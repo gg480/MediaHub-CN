@@ -30,7 +30,22 @@ async function getProxyConfig(): Promise<string | null> {
 }
 
 /**
+ * Check if a hostname is local (should skip proxy)
+ */
+function isLocalHost(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname
+    return hostname === 'localhost' || hostname === '127.0.0.1' ||
+      hostname.startsWith('192.168.') || hostname.startsWith('10.') ||
+      hostname.startsWith('172.')
+  } catch {
+    return false
+  }
+}
+
+/**
  * Make a fetch request to TMDB API with optional proxy support and timeout
+ * Uses undici ProxyAgent for thread-safe proxy forwarding
  */
 async function tmdbFetch(url: string, proxyHost: string | null): Promise<Response> {
   const controller = new AbortController()
@@ -44,20 +59,17 @@ async function tmdbFetch(url: string, proxyHost: string | null): Promise<Respons
       },
     }
 
-    if (proxyHost) {
+    // Use undici ProxyAgent for proxy (thread-safe, unlike env var mutation)
+    if (proxyHost && !isLocalHost(url)) {
       const proxyUrl = proxyHost.startsWith('http') ? proxyHost : `http://${proxyHost}`
-      const prevProxy = process.env.http_proxy
-      const prevHttpsProxy = process.env.https_proxy
       try {
-        process.env.http_proxy = proxyUrl
-        process.env.https_proxy = proxyUrl
-        const response = await fetch(url, fetchOptions)
+        // Dynamic import to avoid issues if undici is not available
+        const { ProxyAgent } = await import('undici')
+        const dispatcher = new ProxyAgent(proxyUrl)
+        const response = await fetch(url, { ...fetchOptions, dispatcher } as unknown as RequestInit)
         return response
-      } finally {
-        if (prevProxy !== undefined) process.env.http_proxy = prevProxy
-        else delete process.env.http_proxy
-        if (prevHttpsProxy !== undefined) process.env.https_proxy = prevHttpsProxy
-        else delete process.env.https_proxy
+      } catch {
+        // undici not available, fall through to direct fetch
       }
     }
 

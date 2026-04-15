@@ -28,10 +28,6 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Stats error:', error)
-    return NextResponse.json({
-      totalMedia: 0, downloaded: 0, monitored: 0, downloading: 0,
-      totalMovies: 0, totalTvShows: 0, indexerCount: 0, enabledIndexers: 0,
-      subscriptionCount: 0, activeSubscriptions: 0,
-    })
+    return NextResponse.json({ error: '获取统计数据失败' }, { status: 500 })
   }
 }

@@ -11,6 +11,8 @@ interface ScheduledTask {
   lastRunAt: string | null
   nextRunAt: string | null
   lastStatus: string | null
+  lastMessage: string | null
+  lastDurationMs: number | null
 }
 
 // GET /api/system/tasks — 获取定时任务列表
@@ -42,6 +44,8 @@ export async function GET() {
             intervalMinutes: parsed.intervalMinutes ?? task.intervalMinutes,
             lastRunAt: parsed.lastRunAt || null,
             lastStatus: parsed.lastStatus || null,
+            lastMessage: parsed.lastMessage || null,
+            lastDurationMs: parsed.lastDurationMs || null,
           }
         } catch {
           return task
