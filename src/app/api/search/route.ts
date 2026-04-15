@@ -2,6 +2,78 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 // ============================================
+// Proxy support
+// ============================================
+
+async function getProxyHost(): Promise<string> {
+  try {
+    const setting = await db.setting.findUnique({ where: { key: 'proxy_host' } })
+    return setting?.value || ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Fetch with optional HTTP proxy support.
+ * If proxy_host is configured and the URL is external, uses the proxy.
+ */
+async function fetchWithProxy(url: string, options: RequestInit = {}): Promise<Response> {
+  const proxy = await getProxyHost()
+  if (!proxy) {
+    return fetch(url, options)
+  }
+  try {
+    const { ProxyAgent } = await import('undici')
+    if (ProxyAgent && !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.') && !url.includes('10.')) {
+      const agent = new ProxyAgent(proxy)
+      return fetch(url, { ...options, dispatcher: agent } as any)
+    }
+  } catch {
+    // undici not available, fall back to direct
+  }
+  return fetch(url, options)
+}
+
+// ============================================
+// Proxy support
+// ============================================
+
+async function getProxyHost(): Promise<string> {
+  try {
+    const setting = await db.setting.findUnique({ where: { key: 'proxy_host' } })
+    return setting?.value || ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Fetch with optional HTTP proxy support.
+ * If proxy_host is configured and the URL is external (not local/private IP),
+ * uses the proxy. Supports Node.js HTTP_PROXY/HTTPS_PROXY env vars via undici.
+ */
+async function fetchWithProxy(url: string, options: RequestInit = {}): Promise<Response> {
+  const proxy = await getProxyHost()
+  if (!proxy) {
+    return fetch(url, options)
+  }
+  try {
+    // If proxy is set, configure fetch to use it
+    // Node.js undici supports dispatcher option for proxy
+    const { setGlobalDispatcher, ProxyAgent } = await import('undici')
+    if (ProxyAgent && !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.') && !url.includes('10.')) {
+      const agent = new ProxyAgent(proxy)
+      // Create a one-off dispatcher for this request
+      return fetch(url, { ...options, dispatcher: agent } as any)
+    }
+  } catch {
+    // undici not available or ProxyAgent failed, fall back to direct
+  }
+  return fetch(url, options)
+}
+
+// ============================================
 // Types
 // ============================================
 
@@ -164,7 +236,7 @@ async function lookupEnglishName(
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 5000)
 
-    const res = await fetch(url, { signal: controller.signal })
+    const res = await fetchWithProxy(url, { signal: controller.signal })
     clearTimeout(timeout)
 
     if (!res.ok) return null
@@ -259,7 +331,7 @@ async function searchTorznab(
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 10000)
 
-      const res = await fetch(url, {
+      const res = await fetchWithProxy(url, {
         signal: controller.signal,
         headers: {
           'User-Agent': 'MediaHub-CN/1.0',
@@ -418,7 +490,7 @@ async function searchNativePt(
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 10000)
 
-      const res = await fetch(url, {
+      const res = await fetchWithProxy(url, {
         signal: controller.signal,
         headers,
       })

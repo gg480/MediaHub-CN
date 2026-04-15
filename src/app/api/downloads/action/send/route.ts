@@ -134,13 +134,14 @@ export async function POST(request: NextRequest) {
 // ============================================
 
 function buildClientUrl(client: ClientRecord): string {
-  const scheme = client.host.startsWith('localhost') || client.host.startsWith('127.0') ? 'http' : 'http'
+  const isLocal = client.host.startsWith('localhost') || client.host.startsWith('127.0') || client.host.startsWith('192.168.') || client.host.startsWith('10.') || client.host.startsWith('172.')
+  const scheme = isLocal ? 'http' : 'https'
   const base = client.baseUrl || ''
   return `${scheme}://${client.host}:${client.port}${base}`
 }
 
-async function qbitLogin(client: ClientRecord): Promise<boolean> {
-  if (!client.username || !client.password) return false
+async function qbitLogin(client: ClientRecord): Promise<string> {
+  if (!client.username || !client.password) return ''
   const baseUrl = buildClientUrl(client)
   try {
     const res = await fetch(`${baseUrl}/api/v2/auth/login`, {
@@ -148,9 +149,15 @@ async function qbitLogin(client: ClientRecord): Promise<boolean> {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `username=${encodeURIComponent(client.username!)}&password=${encodeURIComponent(client.password!)}`,
     })
-    return res.ok && (await res.text()) === 'Ok.'
+    if (res.ok && (await res.text()) === 'Ok.') {
+      // Capture SID cookie from login response
+      const setCookie = res.headers.get('set-cookie') || ''
+      const sidMatch = setCookie.match(/SID=([^;]+)/)
+      return sidMatch ? `SID=${sidMatch[1]}` : ''
+    }
+    return ''
   } catch {
-    return false
+    return ''
   }
 }
 
@@ -163,8 +170,9 @@ async function sendToQbittorrent(
 ): Promise<{ success: boolean; message: string; addedInfoHash?: string }> {
   const baseUrl = buildClientUrl(client)
 
-  // Authenticate
-  const loggedIn = await qbitLogin(client)
+  // Authenticate and capture session cookie
+  const sidCookie = await qbitLogin(client)
+  const loggedIn = !!sidCookie || !client.username || !client.password
 
   // Build form data
   const formParams = new URLSearchParams()
@@ -190,6 +198,7 @@ async function sendToQbittorrent(
 
           const addRes = await fetch(`${baseUrl}/api/v2/torrents/add`, {
             method: 'POST',
+            headers: sidCookie ? { 'Cookie': sidCookie } : {},
             body: formData,
           })
 
@@ -224,7 +233,10 @@ async function sendToQbittorrent(
 
   const res = await fetch(`${baseUrl}/api/v2/torrents/add`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      ...(sidCookie ? { 'Cookie': sidCookie } : {}),
+    },
     body: formParams.toString(),
   })
 

@@ -196,7 +196,8 @@ export async function POST() {
 // ============================================
 
 function buildClientUrl(client: ClientRecord): string {
-  const scheme = client.host.startsWith('localhost') || client.host.startsWith('127.0') ? 'http' : 'http'
+  const isLocal = client.host.startsWith('localhost') || client.host.startsWith('127.0') || client.host.startsWith('192.168.') || client.host.startsWith('10.') || client.host.startsWith('172.')
+  const scheme = isLocal ? 'http' : 'https'
   const base = client.baseUrl || ''
   return `${scheme}://${client.host}:${client.port}${base}`
 }
@@ -204,16 +205,26 @@ function buildClientUrl(client: ClientRecord): string {
 async function getQbittorrentTorrents(client: ClientRecord): Promise<TorrentInfo[]> {
   const baseUrl = buildClientUrl(client)
 
+  // Authenticate and capture SID cookie
+  let sidCookie = ''
   if (client.username && client.password) {
-    await fetch(`${baseUrl}/api/v2/auth/login`, {
+    const loginRes = await fetch(`${baseUrl}/api/v2/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `username=${encodeURIComponent(client.username!)}&password=${encodeURIComponent(client.password!)}`,
-    }).catch(() => {})
+    }).catch(() => undefined as unknown as Response)
+    if (loginRes?.ok) {
+      const setCookie = loginRes.headers.get('set-cookie') || ''
+      const sidMatch = setCookie.match(/SID=([^;]+)/)
+      sidCookie = sidMatch ? `SID=${sidMatch[1]}` : ''
+    }
   }
 
   const res = await fetch(`${baseUrl}/api/v2/torrents/info`, {
-    headers: { 'Accept': 'application/json' },
+    headers: {
+      'Accept': 'application/json',
+      ...(sidCookie ? { 'Cookie': sidCookie } : {}),
+    },
   })
 
   if (!res.ok) return []

@@ -163,12 +163,23 @@ export async function POST(request: NextRequest) {
     // Write NFO file to disk if library path is configured
     const nfoWritten = await writeNfoToDisk(mediaItem, nfoContent)
 
+    // Generate episode NFOs for TV shows
+    let episodeNfoCount = 0
+    if (mediaItem.type === 'tv' && mediaItem.seasons && mediaItem.seasons.length > 0) {
+      episodeNfoCount = await generateEpisodeNfos(mediaItem)
+    }
+
+    // Download poster and fanart images
+    const artworkDownloaded = await downloadArtwork(mediaItem)
+
     return NextResponse.json({
       success: true,
       content: nfoContent,
       type: mediaItem.type === 'movie' ? 'movie' : 'tvshow',
       updated: !!enrichedData,
       writtenToDisk: nfoWritten,
+      episodeNfoCount,
+      artworkDownloaded,
     })
   } catch (error) {
     console.error('NFO scrape error:', error)
@@ -497,4 +508,141 @@ function escXml(str: string | number | null | undefined): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
+}
+
+// ============================================
+// Episode-level NFO generation (TV shows)
+// ============================================
+
+async function generateEpisodeNfos(item: MediaItemData): Promise<number> {
+  if (!item.seasons || item.seasons.length === 0) return 0
+
+  const basePath = await getLibraryBasePath('tv')
+  if (!basePath) return 0
+
+  const title = item.titleCn || item.titleEn || 'Unknown'
+  const safeName = title.replace(/[\\/:*?"<>|]/g, '').trim()
+  const showDir = join(basePath, safeName)
+
+  let count = 0
+
+  for (const season of item.seasons) {
+    if (!season.episodes || season.episodes.length === 0) continue
+
+    const seasonNum = String(season.seasonNumber).padStart(2, '0')
+    const seasonDir = join(showDir, `Season ${seasonNum}`)
+
+    if (!existsSync(seasonDir)) {
+      mkdirSync(seasonDir, { recursive: true })
+    }
+
+    for (const episode of season.episodes) {
+      const epNum = String(episode.episodeNumber).padStart(2, '0')
+      const nfoPath = join(seasonDir, `S${seasonNum}E${epNum}.nfo`)
+
+      const epTitle = episode.titleCn || episode.titleEn || ''
+      const epRating = 0 // Episode-level ratings can be added later
+      const epAirDate = episode.airDate || ''
+      const epOverview = episode.overview || ''
+
+      let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+      xml += '<episodedetails>\n'
+      xml += `  <title>${escXml(epTitle)}</title>\n`
+      if (season.seasonNumber) xml += `  <season>${season.seasonNumber}</season>\n`
+      if (episode.episodeNumber) xml += `  <episode>${episode.episodeNumber}</episode>\n`
+      xml += `  <showtitle>${escXml(title)}</showtitle>\n`
+      if (item.tmdbId) xml += `  <tmdbid>${item.tmdbId}</tmdbid>\n`
+      if (epRating > 0) xml += `  <rating>${epRating.toFixed(1)}</rating>\n`
+      if (epAirDate) xml += `  <aired>${escXml(epAirDate)}</aired>\n`
+      if (epOverview) xml += `  <plot>${escXml(epOverview)}</plot>\n`
+      xml += `  <playcount>0</playcount>\n`
+      xml += `  <watched>false</watched>\n`
+      xml += '</episodedetails>'
+
+      try {
+        const bom = Buffer.from([0xEF, 0xBB, 0xBF])
+        writeFileSync(nfoPath, Buffer.concat([bom, Buffer.from(xml, 'utf-8')]))
+        count++
+      } catch (error) {
+        console.error(`Failed to write episode NFO: ${nfoPath}`, error)
+      }
+    }
+  }
+
+  if (count > 0) {
+    console.log(`Generated ${count} episode NFOs for: ${title}`)
+  }
+
+  return count
+}
+
+// ============================================
+// Poster & Fanart Download
+// ============================================
+
+const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/original'
+
+async function downloadArtwork(item: MediaItemData): Promise<boolean> {
+  const basePath = await getLibraryBasePath(item.type)
+  if (!basePath) return false
+
+  const title = item.titleCn || item.titleEn || 'Unknown'
+  const year = item.year || ''
+  const safeName = title.replace(/[\\/:*?"<>|]/g, '').trim()
+  const folderName = year ? `${safeName} (${year})` : safeName
+  const targetDir = join(basePath, folderName)
+
+  let downloaded = false
+
+  try {
+    if (!existsSync(targetDir)) {
+      mkdirSync(targetDir, { recursive: true })
+    }
+
+    // Download poster
+    const posterPath = item.posterPath
+    if (posterPath) {
+      const posterUrl = `${TMDB_IMAGE_BASE}${posterPath}`
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 30000)
+        const res = await fetch(posterUrl, { signal: controller.signal })
+        clearTimeout(timeout)
+
+        if (res.ok) {
+          const buffer = Buffer.from(await res.arrayBuffer())
+          writeFileSync(join(targetDir, 'poster.jpg'), buffer)
+          downloaded = true
+          console.log(`Poster downloaded: ${targetDir}/poster.jpg`)
+        }
+      } catch (error) {
+        console.error(`Failed to download poster for ${title}:`, error)
+      }
+    }
+
+    // Download fanart
+    const backdropPath = item.backdropPath
+    if (backdropPath) {
+      const fanartUrl = `${TMDB_IMAGE_BASE}${backdropPath}`
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 30000)
+        const res = await fetch(fanartUrl, { signal: controller.signal })
+        clearTimeout(timeout)
+
+        if (res.ok) {
+          const buffer = Buffer.from(await res.arrayBuffer())
+          writeFileSync(join(targetDir, 'fanart.jpg'), buffer)
+          downloaded = true
+          console.log(`Fanart downloaded: ${targetDir}/fanart.jpg`)
+        }
+      } catch (error) {
+        console.error(`Failed to download fanart for ${title}:`, error)
+      }
+    }
+  } catch (error) {
+    console.error('Artwork download error:', error)
+  }
+
+  return downloaded
 }
