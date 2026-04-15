@@ -35,6 +35,7 @@ interface NotificationChannel {
 interface SystemStatus {
   status: string
   version: string
+  responseTimeMs: number
   uptime: { formatted: string }
   database: { status: string; latencyMs: number }
   memory: { heapUsedMB: number; heapTotalMB: number; rssMB: number; usagePercent: number }

@@ -19,14 +19,12 @@ import {
 import { useToast } from '@/hooks/use-toast'
 
 export function MediaDetail() {
-  const { selectedMediaId, setSelectedMediaId, setCurrentPage } = useAppStore()
+  const { selectedMediaId, setSelectedMediaId, setCurrentPage, setInitialSearchQuery } = useAppStore()
   const [media, setMedia] = useState<MediaItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [scraping, setScraping] = useState(false)
   const [doubanScraping, setDoubanScraping] = useState(false)
   const [nfoContent, setNfoContent] = useState<string | null>(null)
-  const [tmdbData, setTmdbData] = useState<Record<string, unknown> | null>(null)
-  const [tmdbLoading, setTmdbLoading] = useState(false)
   const { toast } = useToast()
 
   const loadMedia = async (signal: AbortSignal) => {
@@ -64,7 +62,6 @@ export function MediaDetail() {
     setSelectedMediaId(null)
     setMedia(null)
     setNfoContent(null)
-    setTmdbData(null)
   }
 
   const scrapeMetadata = async () => {
@@ -128,6 +125,11 @@ export function MediaDetail() {
 
   const searchAndDownload = () => {
     if (media) {
+      const title = media.titleEn || media.titleCn || ''
+      setInitialSearchQuery(title)
+      setSelectedMediaId(null)
+      setMedia(null)
+      setNfoContent(null)
       setCurrentPage('search')
     }
   }

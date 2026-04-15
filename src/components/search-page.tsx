@@ -19,14 +19,25 @@ import {
   HardDrive, Users, Clock, CheckCircle
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { useAppStore } from '@/lib/store'
 
 export function SearchPage() {
+  const { initialSearchQuery, setInitialSearchQuery } = useAppStore()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [qualityFilter, setQualityFilter] = useState<string>('all')
   const [sortBy, setSortBy] = useState<string>('seeders')
   const { toast } = useToast()
+
+  // Read initial query from store (set by media-detail "搜索下载" button)
+  // Use a ref-based approach to avoid lint set-state-in-effect
+  const _initialApplied = useState(false)
+  if (initialSearchQuery && !_initialApplied[0]) {
+    _initialApplied[1](true)
+    setQuery(initialSearchQuery)
+    setInitialSearchQuery(null)
+  }
 
   const doSearch = useCallback(async () => {
     if (!query.trim()) return
