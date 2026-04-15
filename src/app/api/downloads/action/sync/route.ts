@@ -163,8 +163,9 @@ export async function POST() {
         include: { mediaItem: { select: { titleCn: true } } },
         take: 10,
       })
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
       for (const t of recentCompleted) {
-        fetch('/api/notifications/action/send', {
+        fetch(`${baseUrl}/api/notifications/action/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

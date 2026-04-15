@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { execSync } from 'child_process'
+import { platform } from 'os'
 
 // GET /api/system/status — 系统健康状态
 export async function GET() {
@@ -75,6 +77,9 @@ export async function GET() {
     const memTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024)
     const memRssMB = Math.round(memUsage.rss / 1024 / 1024)
 
+    // 8. 磁盘空间检查
+    const diskSpace = getDiskSpace()
+
     const totalLatency = Date.now() - startTime
 
     return NextResponse.json({
@@ -94,6 +99,7 @@ export async function GET() {
         rssMB,
         usagePercent: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100),
       },
+      disk: diskSpace,
       stats: {
         mediaItems: mediaCount,
         downloading: downloadingCount,
@@ -143,4 +149,88 @@ export async function GET() {
       { status: 500 }
     )
   }
+}
+
+// ============================================
+// Disk Space Monitoring
+// ============================================
+
+function getDiskSpace(): Array<{
+  mountpoint: string
+  totalGB: number
+  usedGB: number
+  freeGB: number
+  usagePercent: number
+}> {
+  const results: Array<{
+    mountpoint: string
+    totalGB: number
+    usedGB: number
+    freeGB: number
+    usagePercent: number
+  }> = []
+
+  try {
+    const isLinux = platform() === 'linux'
+    const isMac = platform() === 'darwin'
+
+    if (isLinux || isMac) {
+      // Use df command to get disk space info (POSIX compatible)
+      const output = execSync('df -k 2>/dev/null || echo ""', {
+        encoding: 'utf-8',
+        timeout: 5000,
+      }).trim()
+
+      const lines = output.split('\n')
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].trim().split(/\s+/)
+        if (parts.length < 6) continue
+
+        const totalKB = parseInt(parts[1], 10)
+        const usedKB = parseInt(parts[2], 10)
+        const freeKB = parseInt(parts[3], 10)
+        const mountpoint = parts[5]
+
+        // Skip pseudo-filesystems and small mounts
+        if (totalKB < 1024 * 1024) continue // < 1GB
+        if (mountpoint.startsWith('/dev') || mountpoint.startsWith('/proc') ||
+            mountpoint.startsWith('/sys') || mountpoint.startsWith('/run') ||
+            mountpoint.startsWith('/snap')) continue
+
+        const totalGB = Math.round(totalKB / 1024 / 1024 * 10) / 10
+        const usedGB = Math.round(usedKB / 1024 / 1024 * 10) / 10
+        const freeGB = Math.round(freeKB / 1024 / 1024 * 10) / 10
+        const usagePercent = totalKB > 0 ? Math.round((usedKB / totalKB) * 100) : 0
+
+        results.push({ mountpoint, totalGB, usedGB, freeGB, usagePercent })
+      }
+    }
+
+    // Fallback: check current working directory
+    if (results.length === 0) {
+      try {
+        const cwdOutput = execSync('df -k . 2>/dev/null | tail -1', {
+          encoding: 'utf-8',
+          timeout: 5000,
+        }).trim()
+        const parts = cwdOutput.split(/\s+/)
+        if (parts.length >= 6) {
+          const totalKB = parseInt(parts[1], 10)
+          const usedKB = parseInt(parts[2], 10)
+          const freeKB = parseInt(parts[3], 10)
+          results.push({
+            mountpoint: parts[5] || '/',
+            totalGB: Math.round(totalKB / 1024 / 1024 * 10) / 10,
+            usedGB: Math.round(usedKB / 1024 / 1024 * 10) / 10,
+            freeGB: Math.round(freeKB / 1024 / 1024 * 10) / 10,
+            usagePercent: totalKB > 0 ? Math.round((usedKB / totalKB) * 100) : 0,
+          })
+        }
+      } catch {}
+    }
+  } catch {
+    // Disk space check failed silently
+  }
+
+  return results
 }

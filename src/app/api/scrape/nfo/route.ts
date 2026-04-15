@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { join, dirname } from 'path'
 
 const TMDB_API_BASE = 'https://api.themoviedb.org/3'
 
@@ -62,10 +64,14 @@ export async function GET(request: NextRequest) {
       },
     })
 
+    // Write NFO file to disk if library path is configured
+    const nfoWritten = await writeNfoToDisk(mediaItem, nfoContent)
+
     return NextResponse.json({
       content: nfoContent,
       type: mediaItem.type === 'movie' ? 'movie' : 'tvshow',
       filePath: generateNfoPath(mediaItem),
+      writtenToDisk: nfoWritten,
     })
   } catch (error) {
     console.error('NFO generation error:', error)
@@ -154,11 +160,15 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Write NFO file to disk if library path is configured
+    const nfoWritten = await writeNfoToDisk(mediaItem, nfoContent)
+
     return NextResponse.json({
       success: true,
       content: nfoContent,
       type: mediaItem.type === 'movie' ? 'movie' : 'tvshow',
       updated: !!enrichedData,
+      writtenToDisk: nfoWritten,
     })
   } catch (error) {
     console.error('NFO scrape error:', error)
@@ -426,6 +436,57 @@ function generateNfoPath(item: MediaItemData): string {
     return `${safeName} (${year})${safeName ? '/movie.nfo' : '/movie.nfo'}`
   }
   return `${safeName} (${year})/tvshow.nfo`
+}
+
+// ============================================
+// Write NFO to disk
+// ============================================
+
+async function getLibraryBasePath(mediaType: string): Promise<string | null> {
+  try {
+    const key = mediaType === 'tv' ? 'tv_library_path' : 'movie_library_path'
+    const setting = await db.setting.findUnique({ where: { key } })
+    return setting?.value || null
+  } catch {
+    return null
+  }
+}
+
+async function writeNfoToDisk(item: MediaItemData, nfoContent: string): Promise<boolean> {
+  try {
+    const basePath = await getLibraryBasePath(item.type)
+    if (!basePath) return false
+
+    // Build the full filesystem path
+    const title = item.titleCn || item.titleEn || 'Unknown'
+    const year = item.year || ''
+    const safeName = title.replace(/[\\/:*?"<>|]/g, '').trim()
+    const folderName = year ? `${safeName} (${year})` : safeName
+    const nfoFilename = item.type === 'movie' ? 'movie.nfo' : 'tvshow.nfo'
+    const fullPath = join(basePath, folderName, nfoFilename)
+
+    // Ensure parent directory exists
+    const parentDir = dirname(fullPath)
+    if (!existsSync(parentDir)) {
+      mkdirSync(parentDir, { recursive: true })
+    }
+
+    // Write NFO file with UTF-8 BOM for better compatibility with Chinese players
+    const bom = Buffer.from([0xEF, 0xBB, 0xBF])
+    writeFileSync(fullPath, Buffer.concat([bom, Buffer.from(nfoContent, 'utf-8')]))
+
+    // Update the NFO record with the actual filesystem path
+    await db.nfoFile.update({
+      where: { id: `${item.tmdbId || item.titleCn || 'unknown'}-main` },
+      data: { filePath: fullPath },
+    }).catch(() => {})
+
+    console.log(`NFO written to disk: ${fullPath}`)
+    return true
+  } catch (error) {
+    console.error('Failed to write NFO to disk:', error)
+    return false
+  }
 }
 
 function escXml(str: string | number | null | undefined): string {

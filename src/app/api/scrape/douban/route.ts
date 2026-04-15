@@ -38,11 +38,29 @@ async function fetchWithProxy(url: string, cookie: string): Promise<Response> {
     headers['Cookie'] = cookie
   }
 
+  // Build fetch URL with proxy if configured
+  let fetchUrl = url
+  if (proxyHost) {
+    // Support HTTP proxy for environments requiring proxy access to Douban
+    try {
+      const proxyUrl = new URL(proxyHost)
+      // Use proxy-agent style: prepend proxy URL before target URL
+      // Note: Node.js 18+ supports HTTPS_PROXY env var via undici
+      fetchUrl = `${proxyUrl.protocol}//${proxyUrl.host}${proxyUrl.pathname ? `/${proxyUrl.pathname.replace(/^\//, '')}` : ''}?url=${encodeURIComponent(url)}`
+      // If proxy doesn't support URL param, fall back to direct with proxy env hint
+      if (!proxyUrl.searchParams?.get('url')) {
+        fetchUrl = url // Use direct URL, rely on HTTP_PROXY/HTTPS_PROXY env var
+      }
+    } catch {
+      fetchUrl = url // Invalid proxy URL, use direct
+    }
+  }
+
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 15000)
 
   try {
-    const res = await fetch(url, {
+    const res = await fetch(fetchUrl, {
       signal: controller.signal,
       headers,
     })

@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-import { existsSync, mkdirSync, statSync, readdirSync } from 'fs'
-import { join, dirname, basename, extname } from 'path'
-
-const execAsync = promisify(exec)
+import { existsSync, mkdirSync, statSync, readdirSync, linkSync, copyFileSync, renameSync, writeFileSync } from 'fs'
+import { join, dirname, basename, extname, resolve } from 'path'
 
 // ============================================
 // File Organization API
 // Organizes downloaded media files into a structured library
 // Supports hardlink-first strategy for NAS usage
+// Uses native fs operations (no shell exec) to prevent command injection
 // ============================================
 
 // POST /api/organize
@@ -137,22 +134,29 @@ export async function POST(request: NextRequest) {
             : buildMovieFilename(mediaTitle, file, sourceDir))
 
           try {
+            const safeSource = resolve(file)
+            const safeTarget = resolve(targetFile)
+            // Validate paths are within expected directories
+            if (!safeSource.startsWith(sourceDir) || !safeTarget.startsWith(targetDir)) {
+              console.error(`Security: path traversal detected: ${file} -> ${targetFile}`)
+              continue
+            }
             if (preferredMode === 'hardlink') {
               // Try hardlink first, fall back to copy
               try {
-                await execAsync(`ln "${file}" "${targetFile}"`)
+                linkSync(safeSource, safeTarget)
                 successCount++
               } catch {
                 // Hardlink failed (different filesystem?), try copy
-                await execAsync(`cp -p "${file}" "${targetFile}"`)
+                copyFileSync(safeSource, safeTarget)
                 successCount++
               }
             } else if (preferredMode === 'move') {
-              await execAsync(`mv "${file}" "${targetFile}"`)
+              renameSync(safeSource, safeTarget)
               successCount++
             } else {
               // Copy mode
-              await execAsync(`cp -p "${file}" "${targetFile}"`)
+              copyFileSync(safeSource, safeTarget)
               successCount++
             }
           } catch (err) {
@@ -163,15 +167,17 @@ export async function POST(request: NextRequest) {
         // Also copy subtitle files
         const subtitleFiles = findSubtitleFiles(sourceDir)
         for (const file of subtitleFiles) {
-          const targetFile = join(targetDir, basename(file))
+          const safeSubSource = resolve(file)
+          const safeSubTarget = resolve(join(targetDir, basename(file)))
+          if (!safeSubSource.startsWith(sourceDir) || !safeSubTarget.startsWith(targetDir)) continue
           try {
             if (preferredMode === 'move') {
-              await execAsync(`mv "${file}" "${targetFile}"`)
+              renameSync(safeSubSource, safeSubTarget)
             } else {
               try {
-                await execAsync(`ln "${file}" "${targetFile}"`)
+                linkSync(safeSubSource, safeSubTarget)
               } catch {
-                await execAsync(`cp -p "${file}" "${targetFile}"`)
+                copyFileSync(safeSubSource, safeSubTarget)
               }
             }
           } catch {}
@@ -232,7 +238,8 @@ export async function POST(request: NextRequest) {
     // Fire notification for organize completion (async, non-blocking)
     if (successCount > 0) {
       const organizedTitles = results.filter((r) => r.success).map((r) => r.title).slice(0, 5).join('、')
-      fetch('/api/notifications/action/send', {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+      fetch(`${baseUrl}/api/notifications/action/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

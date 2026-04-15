@@ -38,6 +38,7 @@ interface SystemStatus {
   uptime: { formatted: string }
   database: { status: string; latencyMs: number }
   memory: { heapUsedMB: number; heapTotalMB: number; rssMB: number; usagePercent: number }
+  disk: Array<{ mountpoint: string; totalGB: number; usedGB: number; freeGB: number; usagePercent: number }>
   stats: Record<string, number>
   clients: Array<{ name: string; type: string; status: string }>
 }
@@ -727,6 +728,32 @@ export function Settings() {
                       <p className="text-lg font-semibold">{systemStatus.responseTimeMs}ms</p>
                     </div>
                   </div>
+
+                  {/* 磁盘空间 */}
+                  {systemStatus.disk && systemStatus.disk.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-2">磁盘空间</p>
+                      <div className="space-y-1.5">
+                        {systemStatus.disk.map((d) => (
+                          <div key={d.mountpoint} className="rounded-md border px-3 py-2">
+                            <div className="flex items-center justify-between text-sm mb-1">
+                              <span className="font-medium">{d.mountpoint}</span>
+                              <span className={cn('text-xs font-medium', d.usagePercent > 90 ? 'text-red-500' : d.usagePercent > 75 ? 'text-yellow-600' : 'text-emerald-600')}>
+                                {d.usagePercent}%
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden mb-1">
+                              <div className={cn('h-full rounded-full transition-all', d.usagePercent > 90 ? 'bg-red-500' : d.usagePercent > 75 ? 'bg-yellow-400' : 'bg-emerald-500')} style={{ width: `${d.usagePercent}%` }} />
+                            </div>
+                            <div className="flex justify-between text-[11px] text-muted-foreground">
+                              <span>已用 {d.usedGB} GB</span>
+                              <span>可用 {d.freeGB} GB / {d.totalGB} GB</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 统计概览 */}
                   <div className="grid grid-cols-3 gap-2">
