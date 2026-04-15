@@ -777,8 +777,8 @@ export function Settings() {
                     <div>
                       <p className="text-xs font-medium text-muted-foreground mb-2">下载客户端状态</p>
                       <div className="space-y-1.5">
-                        {systemStatus.clients.map((c) => (
-                          <div key={c.id} className="flex items-center justify-between text-sm rounded-md border px-3 py-2">
+                        {systemStatus.clients.map((c, idx) => (
+                          <div key={c.id ?? `client-${idx}`} className="flex items-center justify-between text-sm rounded-md border px-3 py-2">
                             <div className="flex items-center gap-2">
                               {c.status === 'success' ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" /> : c.status === 'fail' ? <XCircle className="h-3.5 w-3.5 text-red-500" /> : <Clock className="h-3.5 w-3.5 text-muted-foreground" />}
                               <span>{c.name}</span>

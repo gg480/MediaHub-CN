@@ -10,11 +10,6 @@ import { db } from '@/lib/db'
 
 const DOUBAN_SEARCH_URL = 'https://movie.douban.com/j/subject_suggest'
 const DOUBAN_DETAIL_URL = 'https://movie.douban.com/j/subject_abstract'
-const DOUBAN_CELEBRITY_URL = 'https://movie.douban.com/j/celebrities'
-
-interface DoubanSetting {
-  value: string | null
-}
 
 async function getProxyHost(): Promise<string> {
   const setting = await db.setting.findUnique({ where: { key: 'proxy_host' } })
@@ -136,12 +131,12 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // Search by title
-      const searchTitle = searchTitle || mediaItem.titleCn || mediaItem.titleEn || ''
-      if (!searchTitle) {
+      const effectiveSearchTitle = searchTitle || mediaItem.titleCn || mediaItem.titleEn || ''
+      if (!effectiveSearchTitle) {
         return NextResponse.json({ error: '没有可用的搜索标题' }, { status: 400 })
       }
 
-      const searchRes = await handleSearch(searchTitle, mediaItem.type, cookie)
+      const searchRes = await handleSearch(effectiveSearchTitle, mediaItem.type, cookie)
       if (searchRes.status === 200) {
         const searchData = (await searchRes.json()) as { results?: unknown[] }
         if (searchData.results && searchData.results.length > 0) {

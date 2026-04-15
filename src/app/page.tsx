@@ -99,7 +99,7 @@ export default function HomePage() {
 
         {/* Footer */}
         <footer className="border-t px-4 sm:px-6 py-3 text-center text-xs text-muted-foreground">
-          MediaHub-CN v0.1.0 · 中文影视自动化管理工具 · 集成 Radarr + Sonarr + Prowlarr
+          MediaHub-CN v1.0.0 · 中文影视自动化管理工具 · 集成 Radarr + Sonarr + Prowlarr
         </footer>
       </div>
     </div>

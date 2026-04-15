@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Subscription, STATUS_MAP } from '@/lib/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,18 +29,6 @@ export function Subscribe() {
   const { setCurrentPage } = useAppStore()
   const { toast } = useToast()
 
-  const loadSubs = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/subscriptions')
-      if (res.ok) {
-        const data = await res.json()
-        setSubs(Array.isArray(data) ? data : [])
-      }
-    } catch {}
-    setLoading(false)
-  }, [])
-
   useEffect(() => {
     const controller = new AbortController()
     const run = async (signal: AbortSignal) => {
@@ -58,6 +46,18 @@ export function Subscribe() {
     return () => controller.abort()
   }, [])
 
+  const refreshSubs = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/subscriptions')
+      if (res.ok) {
+        const data = await res.json()
+        setSubs(Array.isArray(data) ? data : [])
+      }
+    } catch {}
+    setLoading(false)
+  }
+
   const addSub = async () => {
     setAdding(true)
     try {
@@ -69,7 +69,7 @@ export function Subscribe() {
       if (res.ok) {
         toast({ title: '订阅已创建' })
         setShowAdd(false)
-        loadSubs()
+        refreshSubs()
       } else {
         const data = await res.json()
         toast({ title: '创建失败', description: data.error, variant: 'destructive' })

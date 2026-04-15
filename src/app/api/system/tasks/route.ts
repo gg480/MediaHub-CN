@@ -145,11 +145,36 @@ export async function POST(request: NextRequest) {
         break
       }
       case 'file_organize': {
-        result = { message: '文件整理任务需要手动触发，请到下载页面操作' }
+        // 触发文件整理
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+        const organizeResp = await fetch(`${baseUrl}/api/organize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'hardlink' }),
+        })
+        result = await organizeResp.json() as Record<string, unknown>
         break
       }
       case 'indexer_sync': {
-        result = { message: '索引器同步任务已加入队列' }
+        // 触发索引器同步 - 重新拉取所有索引器的状态
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+        const indexersResp = await fetch(`${baseUrl}/api/indexers`)
+        if (indexersResp.ok) {
+          const indexers = (await indexersResp.json()) as Array<{ id: string }>
+          let tested = 0
+          let ok = 0
+          for (const idx of indexers.slice(0, 20)) {
+            try {
+              const testResp = await fetch(`${baseUrl}/api/indexers/${idx.id}/test`, { method: 'POST' })
+              const testData = await testResp.json() as Record<string, unknown>
+              if (testData.success) ok++
+            } catch { /* skip */ }
+            tested++
+          }
+          result = { message: `索引器同步完成: ${ok}/${tested} 个可用`, tested, ok }
+        } else {
+          result = { message: '获取索引器列表失败' }
+        }
         break
       }
       default:

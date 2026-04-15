@@ -80,7 +80,7 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
       <div className="px-6 py-4">
         <Separator className="bg-slate-700/50 mb-4" />
         <div className="text-xs text-slate-500">
-          <p>MediaHub-CN v0.1.0</p>
+          <p>MediaHub-CN v1.0.0</p>
           <p className="mt-1">🇨🇳 面向中国用户</p>
         </div>
       </div>

@@ -7,8 +7,6 @@ interface AppState {
   setCurrentPage: (page: Page) => void
   sidebarOpen: boolean
   setSidebarOpen: (open: boolean) => void
-  searchQuery: string
-  setSearchQuery: (q: string) => void
   selectedMediaId: string | null
   setSelectedMediaId: (id: string | null) => void
 }
@@ -18,8 +16,6 @@ export const useAppStore = create<AppState>((set) => ({
   setCurrentPage: (page) => set({ currentPage: page, sidebarOpen: false }),
   sidebarOpen: false,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
-  searchQuery: '',
-  setSearchQuery: (q) => set({ searchQuery: q }),
   selectedMediaId: null,
   setSelectedMediaId: (id) => set({ selectedMediaId: id }),
 }))

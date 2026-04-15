@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { MediaItem, getPosterUrl, formatSize, STATUS_MAP } from '@/lib/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,19 +25,6 @@ export function Library() {
   const { setCurrentPage, setSelectedMediaId } = useAppStore()
   const { toast } = useToast()
 
-  const loadMedia = useCallback(async () => {
-    setLoading(true)
-    try {
-      const typeParam = filter !== 'all' ? `&mediaType=${filter}` : ''
-      const res = await fetch(`/api/media?${typeParam}`)
-      if (res.ok) {
-        const data = await res.json()
-        setMedia(Array.isArray(data) ? data : [])
-      }
-    } catch {}
-    setLoading(false)
-  }, [filter])
-
   useEffect(() => {
     const controller = new AbortController()
     const typeParam = filter !== 'all' ? `&mediaType=${filter}` : ''
@@ -47,7 +34,7 @@ export function Library() {
         const res = await fetch(`/api/media?${typeParam}`, { signal })
         if (res.ok) {
           const data = await res.json()
-          setMedia(Array.isArray(data) ? data : [])
+          setMedia(Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : [])
         }
       } catch {}
       setLoading(false)
