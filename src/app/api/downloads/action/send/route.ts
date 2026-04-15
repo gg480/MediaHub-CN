@@ -1,27 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { buildClientUrl, qbitLogin, type ClientRecord } from '@/lib/download-client'
 
 // ============================================
 // Send torrent/magnet to download client
 // POST /api/downloads/action/send
 // Body: { downloadTaskId?, magnetUrl?, torrentUrl?, infoHash?, mediaType?, clientId? }
 // ============================================
-
-interface ClientRecord {
-  id: string
-  type: string
-  host: string
-  port: number
-  username?: string | null
-  password?: string | null
-  baseUrl?: string | null
-  category?: string | null
-  directory?: string | null
-  tvCategory?: string | null
-  movieCategory?: string | null
-  tvDirectory?: string | null
-  movieDirectory?: string | null
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -136,33 +121,7 @@ export async function POST(request: NextRequest) {
 // qBittorrent integration
 // ============================================
 
-function buildClientUrl(client: ClientRecord): string {
-  const isLocal = client.host.startsWith('localhost') || client.host.startsWith('127.0') || client.host.startsWith('192.168.') || client.host.startsWith('10.') || client.host.startsWith('172.')
-  const scheme = isLocal ? 'http' : 'https'
-  const base = client.baseUrl || ''
-  return `${scheme}://${client.host}:${client.port}${base}`
-}
 
-async function qbitLogin(client: ClientRecord): Promise<string> {
-  if (!client.username || !client.password) return ''
-  const baseUrl = buildClientUrl(client)
-  try {
-    const res = await fetch(`${baseUrl}/api/v2/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `username=${encodeURIComponent(client.username!)}&password=${encodeURIComponent(client.password!)}`,
-    })
-    if (res.ok && (await res.text()) === 'Ok.') {
-      // Capture SID cookie from login response
-      const setCookie = res.headers.get('set-cookie') || ''
-      const sidMatch = setCookie.match(/SID=([^;]+)/)
-      return sidMatch ? `SID=${sidMatch[1]}` : ''
-    }
-    return ''
-  } catch {
-    return ''
-  }
-}
 
 async function sendToQbittorrent(
   client: ClientRecord,

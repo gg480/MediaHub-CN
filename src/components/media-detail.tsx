@@ -10,11 +10,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
 import {
-  X, Star, Calendar, Film, Tv, Clock, Download, Eye,
-  Search, Trash2, Loader2, Play, Users, Clapperboard,
-  FileText, RefreshCw, Globe, Info
+  X, Star, Calendar, Film, Tv, Download, Eye,
+  Search, Trash2, Loader2, Globe,
+  FileText, RefreshCw
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 

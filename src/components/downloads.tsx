@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { DownloadTask, formatSize, formatSpeed, STATUS_MAP } from '@/lib/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,7 @@ export function Downloads() {
   const [tab, setTab] = useState<'active' | 'history'>('active')
   const { toast } = useToast()
 
-  const loadTasks = useCallback(async () => {
+  const loadTasks = async () => {
     try {
       const res = await fetch('/api/downloads')
       if (res.ok) {
@@ -29,7 +29,7 @@ export function Downloads() {
       }
     } catch {}
     setLoading(false)
-  }, [])
+  }
 
   useEffect(() => {
     const controller = new AbortController()

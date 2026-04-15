@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { buildClientUrl, qbitLogin, type ClientRecord } from '@/lib/download-client'
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -99,43 +100,17 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 // Client communication helpers
 // ============================================
 
-interface ClientRecord {
-  id: string
-  type: string
-  host: string
-  port: number
-  username?: string | null
-  password?: string | null
-  baseUrl?: string | null
-  category?: string | null
-  directory?: string | null
-  tvCategory?: string | null
-  movieCategory?: string | null
-  tvDirectory?: string | null
-  movieDirectory?: string | null
-}
-
-function buildClientUrl(client: ClientRecord): string {
-  const scheme = client.host.startsWith('localhost') || client.host.startsWith('127.0') ? 'http' : 'http'
-  const base = client.baseUrl || ''
-  return `${scheme}://${client.host}:${client.port}${base}`
-}
-
 async function removeFromClient(client: ClientRecord, infoHash: string): Promise<void> {
   if (client.type === 'qbittorrent') {
     const baseUrl = buildClientUrl(client)
-    // Authenticate
-    if (client.username && client.password) {
-      await fetch(`${baseUrl}/api/v2/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `username=${encodeURIComponent(client.username!)}&password=${encodeURIComponent(client.password!)}`,
-      }).catch(() => {})
-    }
+    const sidCookie = await qbitLogin(client)
     // Delete torrent
     await fetch(`${baseUrl}/api/v2/torrents/delete`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(sidCookie ? { 'Cookie': sidCookie } : {}),
+      },
       body: `hashes=${infoHash}&deleteFiles=true`,
     }).catch(() => {})
   }
